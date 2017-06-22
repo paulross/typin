@@ -10,9 +10,7 @@ import sys
 from typin import str_id_cache
 
 class FunctionTypes(object):
-    def __init__(self, function_name):
-        # TODO: Function scope???
-        self.name = function_name
+    def __init__(self):
         # dict of {name : set(types), ...}
         self.arguments = OrderedDict()
         self.return_types = set()
@@ -58,18 +56,17 @@ class TypeInferencer(object):
     EVENTS = set(('call', 'return', 'exception'))
     def __init__(self):
         """Constructor."""
-        # dict of {file_path : { line_number : FunctionTypes, ...}, ...} 
+        # dict of {file_path : { function_name : FunctionTypes, ...}, ...} 
         self._fn_map = {}
         # Allow re-entrancy with sys.setprofile(profilefunc)
         self._fn_stack = []
                 
-    def _get_func_data(self, file_path, lineno, function_name):
+    def _get_func_data(self, file_path, function_name):
         if file_path not in self._fn_map:
             self._fn_map[file_path] = {}
-        if lineno not in self._fn_map[file_path]:
-            self._fn_map[file_path][lineno] = FunctionTypes(function_name)
-        r = self._fn_map[file_path][lineno]
-        assert r.name == function_name
+        if function_name not in self._fn_map[file_path]:
+            self._fn_map[file_path][function_name] = FunctionTypes()
+        r = self._fn_map[file_path][function_name]
         return r
     
     def __call__(self, frame, event, arg):
@@ -77,9 +74,8 @@ class TypeInferencer(object):
         if event in self.EVENTS:
             frame_info = inspect.getframeinfo(frame)
             file_path = frame_info.filename
-            lineno = frame_info.lineno
+#             lineno = frame_info.lineno
             func_info = self._get_func_data(file_path,
-                                            lineno,
                                             frame_info.function)
             if event == 'call':
                 # arg is None
