@@ -5,16 +5,26 @@ Created on 22 Jun 2017
 """
 from collections import OrderedDict
 import inspect
+import re
 import sys
 
 from typin import str_id_cache
 
+# TODO: How to create the taxonomy? collections.abc [Python3]?
+
+    
 class FunctionTypes(object):
     def __init__(self):
+        # TODO: Track a range of line numbers.
+        # 'call' must be always the same line number
+        # Since functions can not overlap the 'return' shows function bounds
+        #
         # dict of {name : set(types), ...}
         self.arguments = OrderedDict()
         self.return_types = set()
         self.exception_types = set()
+        # TODO: Track call/return type pairs so we can use the @overload
+        # decorator in th e.pyi files.
         
     def add_call(self, frame):
         """Adds a function call from the frame"""
@@ -53,7 +63,10 @@ class FunctionTypes(object):
 
 class TypeInferencer(object):
     """Infers types of function arguments and return values at runtime."""
-    EVENTS = set(('call', 'return', 'exception'))
+    EVENTS = set(('call', 'return'))
+    SET_TRACE_FN = sys.settrace
+    GET_TRACE_FN = sys.gettrace
+    
     def __init__(self):
         """Constructor."""
         # dict of {file_path : { function_name : FunctionTypes, ...}, ...} 
@@ -74,7 +87,15 @@ class TypeInferencer(object):
         if event in self.EVENTS:
             frame_info = inspect.getframeinfo(frame)
             file_path = frame_info.filename
-#             lineno = frame_info.lineno
+            lineno = frame_info.lineno
+            
+#             print(frame)
+#             print(dir(frame))
+#             print(frame.f_code)
+#             print(dir(frame.f_code))
+#             print(frame.function.__qualname__)
+            
+            # TODO: use __qualname__
             func_info = self._get_func_data(file_path,
                                             frame_info.function)
             if event == 'call':
@@ -90,9 +111,9 @@ class TypeInferencer(object):
         return self
     
     def __enter__(self):
-        self._fn_stack.append(sys.getprofile())
-        sys.setprofile(self)
+        self._fn_stack.append(self.GET_TRACE_FN())
+        self.SET_TRACE_FN(self)
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
-        sys.setprofile(self._fn_stack.pop())
+        self.SET_TRACE_FN(self._fn_stack.pop())

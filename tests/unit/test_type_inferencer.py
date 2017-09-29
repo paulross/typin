@@ -8,7 +8,8 @@ import sys
 
 import pytest
 
-from typin import type_inferencer
+
+
 
 def test_creation():
     t = type_inferencer.TypeInferencer()
@@ -25,3 +26,4 @@ def test_single_function():
         func_single_arg('string')
     print()
     pprint.pprint(ti._fn_map)
+
