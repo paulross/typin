@@ -34,10 +34,11 @@ setup(
     author="Paul Ross",
     author_email='apaulross@gmail.com',
     url='https://github.com/paulross/typin',
-    packages=find_packages(include=['typin']),
+    packages=find_packages('src'),
+    package_dir={'':'src'},
     entry_points={
         'console_scripts': [
-            'typin=typin.cli:main'
+#            'typin=typin.cli:main'
         ]
     },
     include_package_data=True,
