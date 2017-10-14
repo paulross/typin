@@ -68,10 +68,10 @@ So we use `sys.setprofile()` for now.
 2017-07-22
 ----------
 
-We neeed to use `sys.setprofile()` because if the function ever raises then `sys.settrace()` will
+We neeed to use `sys.settrace()` because if the function ever raises then `sys.setprofile()` will
 only see it returning None which it might never actually do (implicitly or explicitly).
-So we would then record any exception raising function as possibly returning None.
-With `sys.setprofile` we can eliminate the false returns None by identifying, and ignoring, it as above.
+So we would then record any function that raises as possibly returning None.
+With `sys.settrace` we can eliminate the false returns None by identifying, and ignoring, it as above.
 
 
 

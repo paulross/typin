@@ -63,16 +63,13 @@ class FunctionTypes(object):
 
 class TypeInferencer(object):
     """Infers types of function arguments and return values at runtime."""
-    EVENTS = set(('call', 'return'))
-    SET_TRACE_FN = sys.settrace
-    GET_TRACE_FN = sys.gettrace
     
     def __init__(self):
         """Constructor."""
         # dict of {file_path : { function_name : FunctionTypes, ...}, ...} 
         self._fn_map = {}
         # Allow re-entrancy with sys.setprofile(profilefunc)
-        self._fn_stack = []
+        self._trace_fn_stack = []
                 
     def _get_func_data(self, file_path, function_name):
         if file_path not in self._fn_map:
@@ -83,8 +80,7 @@ class TypeInferencer(object):
         return r
     
     def __call__(self, frame, event, arg):
-        # For sys.setprofile(self)
-        if event in self.EVENTS:
+        if event in ('call', 'return', 'exception'):
             frame_info = inspect.getframeinfo(frame)
             file_path = frame_info.filename
             lineno = frame_info.lineno
@@ -111,9 +107,9 @@ class TypeInferencer(object):
         return self
     
     def __enter__(self):
-        self._fn_stack.append(self.GET_TRACE_FN())
-        self.SET_TRACE_FN(self)
+        self._trace_fn_stack.append(sys.gettrace())
+        sys.settrace(self)
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
-        self.SET_TRACE_FN(self._fn_stack.pop())
+        sys.settrace(self._trace_fn_stack.pop())
