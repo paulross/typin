@@ -3,7 +3,7 @@ Created on 17 Jul 2017
 
 @author: paulross
 '''
-import collections
+# import collections
 import re
 
 class Type(object):
@@ -33,7 +33,7 @@ class Type(object):
                 # but that is not regarded as significant.
                 self._type = []
                 for o in obj:
-                    t = Type(o)
+                    t = Type(o, __ids)
                     if t not in self._type:
                         self._type.append(t)
             elif isinstance(obj, (set, tuple)):

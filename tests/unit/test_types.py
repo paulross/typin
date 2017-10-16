@@ -53,6 +53,10 @@ def test_Type_tuple_equal():
     t1 = types.Type(('Hi there', 1, 4.0))
     assert t1 == t0
 
+def test_Type_list_empty():
+    t = types.Type([])
+    assert str(t) == 'list([])'
+
 def test_Type_list_uniform():
     t = types.Type([1, 2, 3])
     assert str(t) == 'list([int])'
@@ -64,6 +68,20 @@ def test_Type_list_mixed():
 def test_Type_list_mixed_repeated():
     t = types.Type(['', 12, 12.0, '', 12, 12.0])
     assert str(t) == 'list([float, int, str])'
+
+def test_Type_list_recursive():
+    l = []
+    l.append(l)
+#     print(l)
+    t = types.Type(l)
+    assert str(t) == 'list([list])'
+
+def test_Type_list_recursive_mixed():
+    l = ['']
+    l.append(l)
+#     print(l)
+    t = types.Type(l)
+    assert str(t) == 'list([list, str])'
 
 def test_Type_set_uniform():
     t = types.Type(set([1, 2, 3]))
@@ -148,3 +166,24 @@ def test_Type_str_Inner():
     i = Outer.Inner()
     t = types.Type(i)
     assert str(t) == 'tests.unit.test_types.Outer.Inner'
+
+def test_types__package__():
+    assert types.__package__ == 'typin'
+
+def test_Type__module__():
+    assert types.Type.__module__ == 'typin.types'
+
+def test_Type__package__():
+    assert not hasattr(types.Type, '__package__')
+
+def test_Type_Outer__module__():
+    assert Outer.__module__ == 'tests.unit.test_types'
+
+def test_Type_Outer__package__():
+    assert not hasattr(Outer, '__package__')
+
+def test_Type_Inner__module__():
+    assert Outer.Inner.__module__ == 'tests.unit.test_types'
+
+def test_Type_Inner__package__():
+    assert not hasattr(Outer.Inner, '__package__')
