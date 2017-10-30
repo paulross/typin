@@ -4,8 +4,10 @@ Created on 17 Jul 2017
 @author: paulross
 '''
 # import collections
+import functools
 import re
 
+@functools.total_ordering
 class Type(object):
     """This class holds type information extracted from a single object.
     For sequences and so on this will contain a sequence of types.
@@ -64,6 +66,9 @@ class Type(object):
 
     def __eq__(self, other):
         return self._type == other._type
+    
+    def __lt__(self, other):
+        return str(self._type) < str(other._type)
     
     def __hash__(self):
         return hash(str(self))
