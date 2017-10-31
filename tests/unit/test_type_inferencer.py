@@ -516,3 +516,48 @@ def test_four_nested_classes_all_have_methods():
 #     pprint.pprint(ti.function_map[__file__])
 #     print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_inheritance():
+    """From the calendar module stubs file:
+class IllegalMonthError(ValueError):
+    def __init__(self, month: int) -> None: ...
+    def __str__(self) -> str: ...
+    """
+    class IllegalMonthError(ValueError):
+        def __init__(self, month): pass
+        def __str__(self):
+            return ''
+        
+    with type_inferencer.TypeInferencer() as ti:
+        obj = IllegalMonthError(4)
+        str(obj)
+    expected = [
+        'class IllegalMonthError(ValueError):',
+        '    def __init__(self, month: int) -> None: ...',
+        '    def __str__(self) -> str: ...',
+    ]
+#     print()
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_multiple_inheritance_unsorted():
+    """Tests that the base names do not get sorted."""
+    class X: pass
+    class Y: pass
+    class Z: pass
+    class A(Z, X, Y):
+        def __init__(self, month): pass
+        def __str__(self):
+            return ''
+        
+    with type_inferencer.TypeInferencer() as ti:
+        obj = A(4)
+        str(obj)
+    expected = [
+        'class A(Z, X, Y):',
+        '    def __init__(self, month: int) -> None: ...',
+        '    def __str__(self) -> str: ...',
+    ]
+#     print()
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)

@@ -14,13 +14,28 @@ from typin import str_id_cache
 from typin import types
 
 # TODO: How to create the taxonomy? collections.abc [Python3]?
-    
-class FunctionTypes(object):
+
+class TypesBase(object):
     TYPE_NAME_TRANSLATION = {
         '_io.StringIO' : 'IO[bytes]',
         'NoneType' : 'None',
     }
+
+class ClassBaseTypes(TypesBase):
+    """Holds the __bases__ of a class."""
+    def __init__(self, obj):
+        super().__init__()
+        assert inspect.isclass(obj)
+        self.bases = tuple(types.Type(o) for o in obj.__class__.__bases__)
+        
+    def __str__(self):
+        return str(tuple([str(t) for t in self.bases]))
+    
+#     __repr__ = __str__
+
+class FunctionTypes(TypesBase):
     def __init__(self):
+        super().__init__()
         # TODO: Track a range of line numbers.
         # 'call' must be always the same line number
         # Since functions can not overlap the 'return' shows function bounds
@@ -152,11 +167,42 @@ class TypeInferencer(object):
         """Constructor."""
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...} 
         self.function_map = {}
+        # Bases classes of a class from __bases__
+        # dict of {file_path : { namespace : (__bases__, ...), ...}
+        self.class_bases = {} 
         # Allow re-entrancy with sys.settrace(function)
         self._trace_fn_stack = []
     
-    def _pformat_file(self, file_map):
+    def _pformat_class_line(self, file_path, prefix, class_name_stack):
+        assert len(class_name_stack) > 0, \
+            'Class name stack {!r:s} must have one item.'.format(class_name_stack)
+        scoped_name = '.'.join(class_name_stack)
+        
+#         print('TRACE self.class_bases:', '.'.join(scoped_name))
+#         pprint.pprint(self.class_bases)
+        
+        try:
+            bases_types = self.class_bases[file_path][scoped_name]
+        except KeyError:
+            # This is a bit hacky. Suppose we have class B within class A and
+            # only B has methods that we exercise. Then we never get to see
+            # A's inheritance, only B's. In this case we assume A has no base
+            # classes
+            bases_types = tuple()
+        bases_str = [types.Type.str_of_type(t) for t in bases_types]
+        bases_str = [self._strip_locals_from_qualified_name(_v) for _v in bases_str]
+        if 'object' in bases_str:
+            # Python2.7 - we might want to revise this
+            bases_str.remove('object')
+        if len(bases_str) > 0:
+            base_str = '({:s})'.format(', '.join(bases_str))
+        else:
+            base_str = ''
+        return '{:s}class {:s}{:s}:'.format(prefix, class_name_stack[-1], base_str)
+    
+    def _pformat_file(self, file_path):
         # file_map is { namespace : { function_name : FunctionTypes, ...}
+        file_map = self.function_map[file_path]
 #         pprint.pprint(file_map)
         str_list = []
         for namespace in sorted(file_map.keys()):
@@ -177,11 +223,16 @@ class TypeInferencer(object):
                 # Now write out all the enclosing empty classes
                 while i < len(namespace_stack) - 1:
                     prefix = self.INDENT * i
-                    str_list.append('{:s}class {:s}:'.format(prefix, namespace_stack[i]))
+#                     str_list.append('{:s}class {:s}:'.format(prefix, namespace_stack[i]))
+                    str_list.append(self._pformat_class_line(file_path, prefix,
+                                                             namespace_stack[:i+1],
+                                                             ))
                     i += 1
                 # Continue with this base class
                 prefix = self.INDENT * (len(namespace_stack) - 1)
-                str_list.append('{:s}class {:s}:'.format(prefix, namespace_stack[-1]))
+#                 str_list.append('{:s}class {:s}:'.format(prefix, namespace_stack[-1]))
+                str_list.append(self._pformat_class_line(file_path, prefix,
+                                                         namespace_stack))
                 prefix += self.INDENT
             for function_name in sorted(file_map[namespace]):
                 str_list.append('{:s}def {:s}{:s}'.format(
@@ -198,9 +249,9 @@ class TypeInferencer(object):
         if file is None:
             for file_path in sorted(self.function_map.keys()):
                 str_list.append('File: {:s}'.format(file_path))
-                str_list.extend(self._pformat_file(self.function_map[file_path]))
+                str_list.extend(self._pformat_file(file_path))
         else:
-            str_list.extend(self._pformat_file(self.function_map[file]))
+            str_list.extend(self._pformat_file(file))
         return '\n'.join(str_list)
                 
     def _get_func_data(self, file_path, qualified_name):
@@ -222,18 +273,62 @@ class TypeInferencer(object):
             self.function_map[file_path][namespace][function_name] = FunctionTypes()
         r = self.function_map[file_path][namespace][function_name]
         return r
-
+    
+    def _set_bases(self, file_path, q_name, bases):
+        """classname including dotted scope."""
+        parent_scope = '.'.join(q_name.split('.')[:-1])
+        if file_path not in self.function_map:
+            self.class_bases[file_path] = {}
+        if parent_scope not in self.class_bases[file_path]:
+            self.class_bases[file_path][parent_scope] = bases
+        elif self.class_bases[file_path][parent_scope] != bases:
+#             print('TRACE:', str(bases))
+            raise ValueError('Bases changed for {:s} from {!r:s} to {!r:s}'.format(
+                    parent_scope,
+                    self.class_bases[file_path][parent_scope],
+                    bases,
+                )
+            )
+    
+    def _strip_locals_from_qualified_name(self, qualified_name):
+        idx = qualified_name.find('<locals>')
+        if idx == -1:
+            return qualified_name
+        # Strip prefix
+        return qualified_name[idx + len('<locals>') + 1:]
+        
     def _qualified_name(self, frame):
         # The qualified name of the function 
-        # See: https://stackoverflow.com/questions/1132543/getting-callable-object-from-the-frame
-        # Py2: if o.func_code is frame.f_code:
-        for o in gc.get_objects():
-            if inspect.isfunction(o) and o.__code__ is frame.f_code:
-                idx = o.__qualname__.find('<locals>')
-                if idx != -1:
-                    return o.__qualname__[idx + len('<locals>') + 1:]
-                else:
-                    return o.__qualname__
+        q_name = ''
+        bases = tuple()
+        fn_obj = None
+        for fn_obj in gc.get_objects():
+            # See:
+            # https://stackoverflow.com/questions/1132543/getting-callable-object-from-the-frame
+            # Py2: if o.func_code is frame.f_code:
+            if inspect.isfunction(fn_obj) and fn_obj.__code__ is frame.f_code:
+#                 idx = fn_obj.__qualname__.find('<locals>')
+#                 if idx == -1:
+#                     q_name = fn_obj.__qualname__
+#                 else:
+#                     # Strip prefix
+#                     q_name = fn_obj.__qualname__[idx + len('<locals>') + 1:]
+                q_name = self._strip_locals_from_qualified_name(fn_obj.__qualname__)
+                break
+        if fn_obj is not None:
+            for class_obj in gc.get_objects():
+                # Something like:
+                # function_object.__name__ in class_obj.__dict__
+                # and class_obj.__dict__[function_object.__name__] == function_object
+                if inspect.isclass(class_obj) \
+                and fn_obj.__name__ in class_obj.__dict__ \
+                and class_obj.__dict__[fn_obj.__name__] == fn_obj:
+#                     bases = ClassBaseTypes(class_obj)
+#                     bases = class_obj.__class__.__bases__
+                    bases = class_obj.__bases__
+#                     print('TRACE finding bases:', class_obj, class_obj.__class__, bases)
+#         print('TRACE:', q_name, bases)
+        return q_name, bases
 
     def __call__(self, frame, event, arg):
         logging.debug('TypeInferencer.__call__', event, arg)
@@ -293,7 +388,9 @@ class TypeInferencer(object):
 #             print('Qualified name:', self._qualified_name(frame))
             
 #             func_types = self._get_func_data(file_path, function_name)
-            func_types = self._get_func_data(file_path, self._qualified_name(frame))
+            q_name, bases = self._qualified_name(frame)
+            self._set_bases(file_path, q_name, bases)
+            func_types = self._get_func_data(file_path, q_name)
             if event == 'call':
                 # arg is None
                 func_types.add_call(frame, lineno)
