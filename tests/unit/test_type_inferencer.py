@@ -79,6 +79,51 @@ def test_single_function_that_raises():
     ]
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
+def test_single_function_that_might_raises_does_not_return_none():
+    """Functions that raise will also be seen to return None from the same
+    line even if they never return None."""
+    def may_raise(v):
+        if v == 0:
+            raise ValueError('Value can not be zero')
+        return 1.0 / v
+    
+    with type_inferencer.TypeInferencer() as ti:
+        may_raise(1)
+        try:
+            may_raise(0)
+        except ValueError:
+            pass
+    expected = [
+        'def may_raise(v: int) -> float: ...',
+    ]
+#     print()
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_single_function_that_might_raises_does_return_none():
+    """Functions that raise will also be seen to return None from the same
+    line. This function could also specifically return None."""
+    def may_raise(v):
+        if v == 0:
+            raise ValueError('Value can not be zero')
+        if v > 0:
+            return 1.0 / v
+        return None
+    
+    with type_inferencer.TypeInferencer() as ti:
+        may_raise(1)
+        may_raise(-1)
+        try:
+            may_raise(0)
+        except ValueError:
+            pass
+    expected = [
+        'def may_raise(v: int) -> Union[None, float]: ...',
+    ]
+#     print()
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
 # ==== Test some functions that take basic builtins ====
 
 # ---- Test numbers ---

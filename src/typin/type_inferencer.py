@@ -72,6 +72,14 @@ class FunctionTypes(TypesBase):
             )
     
     def add_return(self, return_value, line_number):
+        """Records a return value at a particular line number.
+        If the return_value is None and we have previously seen an exception at
+        this line then this is a phantom return value and must be ignored.
+        See ``TypeInferencer.__enter__`` for a description of this.
+        """
+        if return_value is None and line_number in self.exception_types:
+            # Ignore phantom return value
+            return
         t = types.Type(return_value)
         try:
             self.return_types[line_number].add(t)
@@ -404,6 +412,26 @@ class TypeInferencer(object):
         return self
     
     def __enter__(self):
+        """Context manager sets the profiling function.
+        We need to use ``sys.settrace()`` not ``sys.setprofile()`` as the
+        latter does not see the exception.
+        Suppose ``typin/src/typin/research.py`` raises an exception on line 41
+        in function c() we will see the event::
+            
+            typin/src/typin/research.py 41 c return None
+        
+        With ``sys.settrace()`` we get::
+        
+            # c() raises. We can see this as an exception event is followed by
+            # a return None with the same lineno.
+            # Return None on its own is not enough as that might happen in the
+            # normal course of events.
+            typin/src/typin/research.py 41 c exception (<class 'ValueError'>, ValueError(), <traceback object at 0x102365c08>)
+            typin/src/typin/research.py 41 c return None
+
+        So returning None on the same line as a previously seen exception must
+        be ignored as it is a phantom return value.
+        """
         self._trace_fn_stack.append(sys.gettrace())
         sys.settrace(self)
         return self
