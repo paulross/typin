@@ -3,10 +3,11 @@ Created on 22 Jun 2017
 
 @author: paulross
 '''
+import inspect
 import io
-import base64
-import pprint
-import sys
+# import base64
+# import pprint
+# import sys
 
 import pytest
 
@@ -606,3 +607,33 @@ def test_class_multiple_inheritance_unsorted():
 #     print()
 #     print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+# Used for line number and ranges
+line_first = inspect.currentframe().f_lineno + 1
+def function_lineno(v):
+    if v == 0:
+        return inspect.currentframe().f_lineno
+    elif v == 1:
+        raise ValueError()
+    elif v == 2:
+        return inspect.currentframe().f_lineno
+    return inspect.currentframe().f_lineno
+line_last = inspect.currentframe().f_lineno - 1
+
+@pytest.mark.parametrize('value, expected_increment', [
+    (0, 2), # Partial, return
+    (1, 4), # Partial, raises
+    (2, 6), # Partial, return
+    (3, 7), # Full, return
+])
+def test_single_function_line_range(value, expected_increment):
+    with type_inferencer.TypeInferencer() as ti:
+        try:
+            function_lineno(value)
+        except ValueError:
+            pass
+    fts = ti.function_types(__file__, '', 'function_lineno')
+    assert fts.line_range == (line_first, line_first + expected_increment)
+
+
+

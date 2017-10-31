@@ -48,8 +48,14 @@ class FunctionTypes(TypesBase):
         self.exception_types = {}
         # Should be unique
         self.call_line_number = 0
+        # Largest seen line number
+        self.max_line_number = 0
         # TODO: Track call/return type pairs so we can use the @overload
         # decorator in the .pyi files.
+
+    @property
+    def line_range(self):
+        return self.call_line_number, self.max_line_number
         
     def add_call(self, frame, line_number):
         """Adds a function call from the frame."""
@@ -58,6 +64,7 @@ class FunctionTypes(TypesBase):
         # varargs - name entry in the locals for *args or None.
         # keywords - name entry in the locals for *kwargs or None.
         # locals - dict of {name : value, ...} of arguments.
+        self.max_line_number = max(self.max_line_number, line_number)
         arg_info = inspect.getargvalues(frame)
         for arg in arg_info.args:
             try:
@@ -77,6 +84,7 @@ class FunctionTypes(TypesBase):
         this line then this is a phantom return value and must be ignored.
         See ``TypeInferencer.__enter__`` for a description of this.
         """
+        self.max_line_number = max(self.max_line_number, line_number)
         if return_value is None and line_number in self.exception_types:
             # Ignore phantom return value
             return
@@ -87,6 +95,7 @@ class FunctionTypes(TypesBase):
             self.return_types[line_number] = set([t])
         
     def add_exception(self, exception, line_number):
+        self.max_line_number = max(self.max_line_number, line_number)
         t = types.Type(exception)
         try:
             self.exception_types[line_number].add(t)
@@ -180,6 +189,12 @@ class TypeInferencer(object):
         self.class_bases = {} 
         # Allow re-entrancy with sys.settrace(function)
         self._trace_fn_stack = []
+        
+    def function_types(self, file_path, namespace, function_name):
+        """Returns the FunctionTypes object for the file_path, namespace and
+        function_name. namespace will be '' for global functions.
+        May raise a KeyError."""
+        return self.function_map[file_path][namespace][function_name]
     
     def _pformat_class_line(self, file_path, prefix, class_name_stack):
         assert len(class_name_stack) > 0, \
