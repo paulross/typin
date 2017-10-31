@@ -6,7 +6,7 @@ Created on 22 Jun 2017
 import inspect
 import io
 # import base64
-# import pprint
+import pprint
 # import sys
 
 import pytest
@@ -55,7 +55,7 @@ def test_single_function():
 #     print()
 #     print('test_single_function()')
 #     _pretty_print(ti)
-#     pprint.pprint(ti.self.function_map)
+#     pprint.pprint(ti.function_map)
     expected = [
         'def func_single_arg_no_return(arg: str) -> None: ...',
         'def func_single_arg_return_arg(arg: str) -> str: ...',
@@ -74,7 +74,7 @@ def test_single_function_that_raises():
 #     print()
 #     print('test_single_function_that_raises()')
 #     _pretty_print(ti)
-#     pprint.pprint(ti.self.function_map)
+#     pprint.pprint(ti.function_map)
     expected = [
         'def func_that_raises() -> None: ...',
     ]
@@ -124,6 +124,67 @@ def test_single_function_that_might_raises_does_return_none():
 #     print()
 #     print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_context_manager_external():
+    def function(v): pass
+    ti = type_inferencer.TypeInferencer()
+    with ti:
+        function('string')
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    expected = [
+        'def function(v: str) -> None: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_context_manager_nested():
+    def outer(v):
+        pass
+    def inner(v):
+        pass
+    def other(v):
+        pass
+    with type_inferencer.TypeInferencer() as ti_outer:
+        outer('string')
+        with type_inferencer.TypeInferencer() as ti_inner:
+            inner(42)
+        other(4.2)
+#     print()
+#     print(ti_outer.pretty_format(__file__))
+#     print(ti_inner.pretty_format(__file__))
+    expected_outer = [
+        'def other(v: float) -> None: ...',
+        'def outer(v: str) -> None: ...',
+    ]
+    assert ti_outer.pretty_format(__file__) == '\n'.join(expected_outer)
+    expected_inner = [
+        'def inner(v: int) -> None: ...',
+    ]
+    assert ti_inner.pretty_format(__file__) == '\n'.join(expected_inner)
+
+def test_context_manager_nested_external():
+    def outer(v):
+        pass
+    def inner(v):
+        pass
+    def other(v):
+        pass
+    ti = type_inferencer.TypeInferencer()
+    with ti:
+        outer('string')
+        with ti:
+            inner(42)
+        other(4.2)
+#     print()
+#     print(ti_outer.pretty_format(__file__))
+#     print(ti_inner.pretty_format(__file__))
+    expected_outer = [
+        'def inner(v: int) -> None: ...',
+        'def other(v: float) -> None: ...',
+        'def outer(v: str) -> None: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected_outer)
 
 # ==== Test some functions that take basic builtins ====
 
