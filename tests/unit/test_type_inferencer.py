@@ -3,9 +3,10 @@ Created on 22 Jun 2017
 
 @author: paulross
 '''
+import base64 # Just used as an example of stdlib usage
 import inspect
 import io
-# import base64
+import os
 import pprint
 # import sys
 
@@ -696,5 +697,46 @@ def test_single_function_line_range(value, expected_increment):
     fts = ti.function_types(__file__, '', 'function_lineno')
     assert fts.line_range == (line_first, line_first + expected_increment)
 
+# TODO: Generators and line numbers.
+
+def test_file_filtering():
+    """This exercises code in the stdlib, 3rd party libraries and local
+    functions and extracts just the local data."""
+    def function(v):
+        """Local function."""
+        pass
+    with type_inferencer.TypeInferencer() as ti:
+        function('string') # Local function
+        # Stdlib
+        base64.b64encode(b'')
+        base64.b64decode(b'')
+        stream_in = io.StringIO()
+        stream_out = io.StringIO()
+        base64.encode(stream_in, stream_out)
+        base64.decode(stream_in, stream_out)
+        base64.encodebytes(b'')
+        base64.decodebytes(b'')
+        base64.decode(stream_in, stream_out)
+        encoded = base64.encodestring(b'')
+        _decoded = base64.encodestring(encoded)
+        # 3rd Party
+        with pytest.raises(ValueError):
+            raise ValueError
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(os.getcwd())
+#     pprint.pprint(sorted(ti.function_map.keys()))
+#     for file_path in sorted(ti.function_map.keys()):
+#         print(file_path)
+#         pprint.pprint(ti.function_map[file_path])
+#     print(ti.pretty_format(__file__))
+    expected = [
+        'def function(v: str) -> None: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    assert ti.file_paths_filtered(
+        file_path_prefix=os.path.dirname(__file__),
+        relative=True) == [os.path.basename(__file__)]
+    assert ti.file_paths_cwd(relative=True) == ['tests/unit/test_type_inferencer.py']
 
 

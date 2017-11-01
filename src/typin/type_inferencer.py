@@ -7,6 +7,7 @@ from collections import OrderedDict
 import gc
 import inspect
 import logging
+import os
 import pprint
 import sys
 
@@ -33,6 +34,12 @@ class ClassBaseTypes(TypesBase):
     
 #     __repr__ = __str__
 
+class FunctionTypesExceptionBase(Exception):
+    pass
+
+class FunctionTypesExceptionNoData(FunctionTypesExceptionBase):
+    pass
+
 class FunctionTypes(TypesBase):
     def __init__(self):
         super().__init__()
@@ -46,8 +53,9 @@ class FunctionTypes(TypesBase):
         self.return_types = {}
         # dict of {line_number : set(types.Type), ...}
         self.exception_types = {}
-        # Should be unique
-        self.call_line_number = 0
+        # There should be at least one of these, possibly others for generators
+        # where yeild is a re-entry point 
+        self.call_line_numbers = []
         # Largest seen line number
         self.max_line_number = 0
         # TODO: Track call/return type pairs so we can use the @overload
@@ -55,7 +63,9 @@ class FunctionTypes(TypesBase):
 
     @property
     def line_range(self):
-        return self.call_line_number, self.max_line_number
+        if len(self.call_line_numbers) == 0:
+            raise FunctionTypesExceptionNoData()
+        return self.call_line_numbers[0], self.max_line_number
         
     def add_call(self, frame, line_number):
         """Adds a function call from the frame."""
@@ -71,12 +81,20 @@ class FunctionTypes(TypesBase):
                 self.arguments[arg].add(types.Type(arg_info.locals[arg]))
             except KeyError:
                 self.arguments[arg] = set([types.Type(arg_info.locals[arg])])
-        if self.call_line_number == 0:
-            self.call_line_number = line_number
-        elif self.call_line_number != line_number:
-            raise ValueError('Call site was {:d} now {:d}'.format(
-                self.call_line_number, line_number)
-            )
+        if len(self.call_line_numbers) == 0:
+            # First call
+            self.call_line_numbers.append(line_number)
+        else:
+            # Add a new entry point for yield statements
+            if line_number not in self.call_line_numbers:
+                self.call_line_numbers.append(line_number)
+            # Sanity check: Call sites can increase when using yield statements
+            # but never can decrease
+            if self.call_line_numbers[0] > line_number:
+                file_path = inspect.getframeinfo(frame).filename
+                raise ValueError('Call site in {:s} goes backwards, was {:d} now {:d}'.format(
+                    file_path, self.call_line_numbers[0], line_number)
+                )
     
     def add_return(self, return_value, line_number):
         """Records a return value at a particular line number.
@@ -195,6 +213,21 @@ class TypeInferencer(object):
         function_name. namespace will be '' for global functions.
         May raise a KeyError."""
         return self.function_map[file_path][namespace][function_name]
+    
+    def file_paths_filtered(self, file_path_prefix=os.sep, relative=False):
+        """Returns a list of file paths seen that have the prefix when that is
+        converted to an absolute path e.g. os.getcwd().
+        The default arguments mean that all paths are returned."""
+        abs_path = os.path.abspath(os.path.normpath(file_path_prefix))
+        ret_val = [k for k in self.function_map.keys() if k.startswith(abs_path)]
+        if relative:
+            ret_val = [v[len(abs_path)+1:] for v in ret_val]
+        return ret_val
+    
+    def file_paths_cwd(self, relative=False):
+        """Returns a list of file paths seen that are below the current
+        working directory."""
+        return self.file_paths_filtered(os.getcwd(), relative=relative)
     
     def _pformat_class_line(self, file_path, prefix, class_name_stack):
         assert len(class_name_stack) > 0, \
