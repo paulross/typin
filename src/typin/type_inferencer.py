@@ -54,7 +54,7 @@ class FunctionTypes(TypesBase):
         # dict of {line_number : set(types.Type), ...}
         self.exception_types = {}
         # There should be at least one of these, possibly others for generators
-        # where yeild is a re-entry point 
+        # where yield is a re-entry point 
         self.call_line_numbers = []
         # Largest seen line number
         self.max_line_number = 0

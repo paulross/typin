@@ -696,8 +696,32 @@ def test_single_function_line_range(value, expected_increment):
             pass
     fts = ti.function_types(__file__, '', 'function_lineno')
     assert fts.line_range == (line_first, line_first + expected_increment)
+    assert fts.call_line_numbers == [line_first,]
 
-# TODO: Generators and line numbers.
+# Generators and line numbers.
+# Used for line number and ranges
+line_first_gen = inspect.currentframe().f_lineno + 1
+def function_gen_lineno():
+    for _i in range(3):
+        yield inspect.currentframe().f_lineno
+    for _i in range(3):
+        yield inspect.currentframe().f_lineno
+line_last_gen = inspect.currentframe().f_lineno - 1
+
+def test_generator_line_number_range():
+    """Tests the line numbers of """
+    lines_yielded = []
+    with type_inferencer.TypeInferencer() as ti:
+        for line_no in function_gen_lineno():
+            lines_yielded.append(line_no - line_first_gen)
+    assert lines_yielded == [2, 2, 2, 4, 4, 4,]
+    fts = ti.function_types(__file__, '', 'function_gen_lineno')
+    assert fts.line_range == (line_first_gen, line_last_gen)
+    assert fts.call_line_numbers == [
+                                     line_first_gen,
+                                     line_first_gen + 2,
+                                     line_first_gen + 4,
+                                     ]
 
 def test_file_filtering():
     """This exercises code in the stdlib, 3rd party libraries and local
