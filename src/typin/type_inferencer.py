@@ -51,8 +51,13 @@ class FunctionTypes(TypesBase):
         self.arguments = OrderedDict()
         # dict of {line_number : set(types.Type), ...}
         self.return_types = {}
+        # TODO: Store the id() of the exception so that we can track how
+        # its arc through the stack.
+        # Something like {line : (types.Type, set(id...)), ...}
+        # On reflection, probably not as id() values might get reused.
+        #
         # dict of {line_number : set(types.Type), ...}
-        self.exception_types = {}
+        self._exception_types = {}
         # There should be at least one of these, possibly others for generators
         # where yield is a re-entry point 
         self.call_line_numbers = []
@@ -60,6 +65,13 @@ class FunctionTypes(TypesBase):
         self.max_line_number = 0
         # TODO: Track call/return type pairs so we can use the @overload
         # decorator in the .pyi files.
+        
+    @property
+    def exception_type_strings(self):
+        ret = {}
+        for k, v in self._exception_types.items():
+            ret[k] = set([str(t) for t in v])
+        return ret
 
     @property
     def line_range(self):
@@ -103,7 +115,7 @@ class FunctionTypes(TypesBase):
         See ``TypeInferencer.__enter__`` for a description of this.
         """
         self.max_line_number = max(self.max_line_number, line_number)
-        if return_value is None and line_number in self.exception_types:
+        if return_value is None and line_number in self._exception_types:
             # Ignore phantom return value
             return
         t = types.Type(return_value)
@@ -116,9 +128,9 @@ class FunctionTypes(TypesBase):
         self.max_line_number = max(self.max_line_number, line_number)
         t = types.Type(exception)
         try:
-            self.exception_types[line_number].add(t)
+            self._exception_types[line_number].add(t)
         except KeyError:
-            self.exception_types[line_number] = set([t])
+            self._exception_types[line_number] = set([t])
     
     def __str__(self):
         """Returns something like the annotation string."""

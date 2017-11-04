@@ -63,10 +63,11 @@ def test_single_function():
     ]
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
-def func_that_raises():
-    raise ValueError('Error message')
-
 def test_single_function_that_raises():
+    line_raises = inspect.currentframe().f_lineno + 2
+    def func_that_raises():
+        raise ValueError('Error message')
+    
     with type_inferencer.TypeInferencer() as ti:
         try:
             func_that_raises()
@@ -80,6 +81,38 @@ def test_single_function_that_raises():
         'def func_that_raises() -> None: ...',
     ]
     assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'func_that_raises')
+    assert fts.exception_type_strings == {line_raises : {'ValueError'}}
+    
+
+def test_nested_function_that_raises():
+    func_no_catch_line = inspect.currentframe().f_lineno + 2
+    def func_no_catch():
+        func_that_raises()
+    
+    func_that_raises_line = inspect.currentframe().f_lineno + 2
+    def func_that_raises():
+        raise ValueError('Error message')
+    
+    with type_inferencer.TypeInferencer() as ti:
+        try:
+            func_no_catch()
+        except ValueError:
+            pass
+#     print()
+#     print('test_single_function_that_raises()')
+#     _pretty_print(ti)
+#     pprint.pprint(ti.function_map)
+    expected = [
+        'def func_no_catch() -> None: ...',
+        'def func_that_raises() -> None: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'func_that_raises')
+    assert fts.exception_type_strings == {func_that_raises_line : {'ValueError'}}
+    fts = ti.function_types(__file__, '', 'func_no_catch')
+    assert fts.exception_type_strings == {func_no_catch_line : {'ValueError'}}
+    
 
 def test_single_function_that_might_raises_does_not_return_none():
     """Functions that raise will also be seen to return None from the same
@@ -762,5 +795,3 @@ def test_file_filtering():
         file_path_prefix=os.path.dirname(__file__),
         relative=True) == [os.path.basename(__file__)]
     assert ti.file_paths_cwd(relative=True) == ['tests/unit/test_type_inferencer.py']
-
-
