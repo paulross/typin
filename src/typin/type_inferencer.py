@@ -3,7 +3,6 @@ Created on 22 Jun 2017
 
 @author: paulross
 """
-from collections import OrderedDict
 import gc
 import inspect
 import logging
@@ -15,197 +14,6 @@ from typin import str_id_cache
 from typin import types
 
 # TODO: How to create the taxonomy? collections.abc [Python3]?
-
-class TypesBase(object):
-    TYPE_NAME_TRANSLATION = {
-        '_io.StringIO' : 'IO[bytes]',
-        'NoneType' : 'None',
-    }
-
-class ClassBaseTypes(TypesBase):
-    """Holds the __bases__ of a class."""
-    def __init__(self, obj):
-        super().__init__()
-        assert inspect.isclass(obj)
-        self.bases = tuple(types.Type(o) for o in obj.__class__.__bases__)
-        
-    def __str__(self):
-        return str(tuple([str(t) for t in self.bases]))
-    
-#     __repr__ = __str__
-
-class FunctionTypesExceptionBase(Exception):
-    pass
-
-class FunctionTypesExceptionNoData(FunctionTypesExceptionBase):
-    pass
-
-class FunctionTypes(TypesBase):
-    def __init__(self):
-        super().__init__()
-        # TODO: Track a range of line numbers.
-        # 'call' must be always the same line number
-        # Since functions can not overlap the 'return' shows function bounds
-        #
-        # OrderedDict of {argument_name : set(types.Type), ...}
-        self.arguments = OrderedDict()
-        # dict of {line_number : set(types.Type), ...}
-        self.return_types = {}
-        # TODO: Store the id() of the exception so that we can track how
-        # its arc through the stack.
-        # Something like {line : (types.Type, set(id...)), ...}
-        # On reflection, probably not as id() values might get reused.
-        #
-        # dict of {line_number : set(types.Type), ...}
-        self._exception_types = {}
-        # There should be at least one of these, possibly others for generators
-        # where yield is a re-entry point 
-        self.call_line_numbers = []
-        # Largest seen line number
-        self.max_line_number = 0
-        # TODO: Track call/return type pairs so we can use the @overload
-        # decorator in the .pyi files.
-        
-    @property
-    def exception_type_strings(self):
-        ret = {}
-        for k, v in self._exception_types.items():
-            ret[k] = set([str(t) for t in v])
-        return ret
-
-    @property
-    def line_range(self):
-        if len(self.call_line_numbers) == 0:
-            raise FunctionTypesExceptionNoData()
-        return self.call_line_numbers[0], self.max_line_number
-        
-    def add_call(self, frame, line_number):
-        """Adds a function call from the frame."""
-        # arg_info is an ArgInfo object that has the following attributes:
-        # args - list of names as strings.
-        # varargs - name entry in the locals for *args or None.
-        # keywords - name entry in the locals for *kwargs or None.
-        # locals - dict of {name : value, ...} of arguments.
-        self.max_line_number = max(self.max_line_number, line_number)
-        arg_info = inspect.getargvalues(frame)
-        for arg in arg_info.args:
-            try:
-                self.arguments[arg].add(types.Type(arg_info.locals[arg]))
-            except KeyError:
-                self.arguments[arg] = set([types.Type(arg_info.locals[arg])])
-        if len(self.call_line_numbers) == 0:
-            # First call
-            self.call_line_numbers.append(line_number)
-        else:
-            # Add a new entry point for yield statements
-            if line_number not in self.call_line_numbers:
-                self.call_line_numbers.append(line_number)
-            # Sanity check: Call sites can increase when using yield statements
-            # but never can decrease
-            if self.call_line_numbers[0] > line_number:
-                file_path = inspect.getframeinfo(frame).filename
-                raise ValueError('Call site in {:s} goes backwards, was {:d} now {:d}'.format(
-                    file_path, self.call_line_numbers[0], line_number)
-                )
-    
-    def add_return(self, return_value, line_number):
-        """Records a return value at a particular line number.
-        If the return_value is None and we have previously seen an exception at
-        this line then this is a phantom return value and must be ignored.
-        See ``TypeInferencer.__enter__`` for a description of this.
-        """
-        self.max_line_number = max(self.max_line_number, line_number)
-        if return_value is None and line_number in self._exception_types:
-            # Ignore phantom return value
-            return
-        t = types.Type(return_value)
-        try:
-            self.return_types[line_number].add(t)
-        except KeyError:
-            self.return_types[line_number] = set([t])
-        
-    def add_exception(self, exception, line_number):
-        self.max_line_number = max(self.max_line_number, line_number)
-        t = types.Type(exception)
-        try:
-            self._exception_types[line_number].add(t)
-        except KeyError:
-            self._exception_types[line_number] = set([t])
-    
-    def __str__(self):
-        """Returns something like the annotation string."""
-        sl = ['type:']
-        for arg in self.arguments:
-            arguments = sorted(self.arguments[arg])
-            if len(arguments) == 1:
-                sl.append('({:s} {:s})'.format(arg, str(arguments[0])))
-            else:
-                sl.append(
-                    '({:s} {!r:s})'.format(
-                        arg,
-                        ', '.join([str(v) for v in arguments])
-                    )
-                )                
-        # self.return_types is a dict of {line_number : set(types.Type), ...}
-        return_types = set()
-        for v in self.return_types.values():
-            return_types |= v
-        if len(return_types) == 0:
-            sl.append('-> None')
-        elif len(return_types) == 1:
-            sl.append('-> {:s}'.format(str(return_types.pop())))
-        else:
-            sl.append('-> Union[{:s}]'.format(
-                ', '.join((self._type(str(t)) for t in return_types)))
-            )
-        return ' '.join(sl)
-    
-    __repr__ = __str__
-    
-    def _type(self, name):
-        """Translates a type name if necessary."""
-        return self.TYPE_NAME_TRANSLATION.get(name, name)
-        
-    def stub_file_str(self):
-        """Example: def encodebytes(s: bytes) -> bytes: ..."""
-        sl = ['(']
-        arg_str_list = []
-        for arg_name in self.arguments:
-            if arg_name.startswith('self'):
-                arg_str_list.append('self')
-            else:
-                argument_types = sorted(self.arguments[arg_name])
-                if len(argument_types) == 1:
-                    arg_str_list.append('{:s}: {:s}'.format(
-                        arg_name,
-                        self._type(str(argument_types[0]))))
-                else:
-                    arg_str_list.append(
-                        '{:s}: {:s}'.format(
-                            arg_name,
-                            ', '.join([self._type(str(v)) for v in argument_types])
-                        )
-                    )
-        sl.append(', '.join(arg_str_list)) 
-        # self.return_types is a dict of {line_number : set(types.Type), ...}
-        sl.append(') ->')
-        return_types = set()
-        for v in self.return_types.values():
-            return_types |= v
-        if len(return_types) == 0:
-            sl.append(' None')
-        elif len(return_types) == 1:
-            sl.append(' {:s}'.format(self._type(str(return_types.pop()))))
-        else:
-            sl.append(
-                ' Union[{:s}]'.format(
-                    ', '.join(
-                        sorted(self._type(str(t)) for t in return_types)
-                    )
-                )
-            )
-        sl.append(': ...')
-        return ''.join(sl)
 
 class TypeInferencer(object):
     """Infers types of function arguments and return values at runtime."""
@@ -338,7 +146,7 @@ class TypeInferencer(object):
         if namespace not in self.function_map[file_path]:
             self.function_map[file_path][namespace] = {}
         if function_name not in self.function_map[file_path][namespace]:
-            self.function_map[file_path][namespace][function_name] = FunctionTypes()
+            self.function_map[file_path][namespace][function_name] = types.FunctionTypes()
         r = self.function_map[file_path][namespace][function_name]
         return r
     
@@ -461,7 +269,7 @@ class TypeInferencer(object):
             func_types = self._get_func_data(file_path, q_name)
             if event == 'call':
                 # arg is None
-                func_types.add_call(frame, lineno)
+                func_types.add_call(inspect.getargvalues(frame), file_path, lineno)
             elif event == 'return':
                 # arg is return value
                 func_types.add_return(arg, lineno)

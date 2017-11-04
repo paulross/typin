@@ -3,6 +3,7 @@ Created on 17 Jul 2017
 
 @author: paulross
 '''
+import collections
 
 from typin import types
 
@@ -187,3 +188,9 @@ def test_Type_Inner__module__():
 
 def test_Type_Inner__package__():
     assert not hasattr(Outer.Inner, '__package__')
+
+# Simulate what inspect.getargvalues(frame) returns
+ArgInfo = collections.namedtuple('ArgInfo', 'args, varargs, keywords, locals')    
+
+def test_FunctionTypes_ctor():
+    types.FunctionTypes()
