@@ -4,6 +4,9 @@ Created on 17 Jul 2017
 @author: paulross
 '''
 import collections
+import inspect
+
+import pytest
 
 from typin import types
 
@@ -192,5 +195,32 @@ def test_Type_Inner__package__():
 # Simulate what inspect.getargvalues(frame) returns
 ArgInfo = collections.namedtuple('ArgInfo', 'args, varargs, keywords, locals')    
 
+def test_inspect_ArgInfo():
+    """Check that the version of the inspect module behaves as we expect."""
+    frame = inspect.currentframe()
+    arg_info = inspect.getargvalues(frame)
+    assert hasattr(arg_info, 'args')
+    assert hasattr(arg_info, 'varargs')
+    assert hasattr(arg_info, 'keywords')
+    assert hasattr(arg_info, 'locals')
+    
 def test_FunctionTypes_ctor():
     types.FunctionTypes()
+
+def test_FunctionTypes_raises_no_data():
+    fts = types.FunctionTypes()
+    with pytest.raises(types.FunctionTypesExceptionNoData):
+        fts.line_range()
+
+def test_FunctionTypes_add_call_add_return():
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def function(i):
+    #    return 2 * 1
+    ai = ArgInfo(['i'], None, None, {'i' : 42})
+    fts.add_call(ai, '/fo/bar/baz.py', 100)
+    fts.add_return(84, 101)
+    assert fts.stub_file_str() == '(i: int) -> int: ...'
+    
+    
+    
