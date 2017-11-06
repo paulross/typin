@@ -16,7 +16,7 @@ def compile_and_exec(filename, *args, **kwargs):
             try:
                 exec(code, globals())
             except SystemExit:
-                # Trap code that calls exit()
+                # Trap CLI code that calls exit(), sys.exit()
                 pass
         print('ti.pretty_format()')
         print(ti.pretty_format())
@@ -88,10 +88,10 @@ USAGE
                         format=logFormat,
                         # datefmt='%y-%m-%d % %H:%M:%S',
                         stream=sys.stdout)
-    print('sys.argv:', sys.argv)
+#     print('sys.argv:', sys.argv)
 #     sys.argv = cli_args.args[1:]
 #     print('sys.argv:', sys.argv)
-    print(cli_args)
+#     print(cli_args)
     filename = cli_args.args[0]
     compile_and_exec(filename, *cli_args.args[1:])
     return 0
