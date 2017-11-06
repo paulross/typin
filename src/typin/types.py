@@ -15,7 +15,8 @@ class Type(object):
     For sequences and so on this will contain a sequence of types.
     """
     # Matches "<class 'int'>" to extract "int"
-    RE_TYPE_STR_MATCH = re.compile(r'<class \'(.+)\'>')
+    # re.ASCII is "<enum RegexFlag>"
+    RE_TYPE_STR_MATCH = re.compile(r'<(?:class|enum) \'(.+)\'>')
     
     def __init__(self, obj, __ids=None):
         """Constructor with an object. __ids is used internally to prevent

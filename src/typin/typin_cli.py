@@ -7,13 +7,19 @@ import sys
 from typin import type_inferencer
 
 def compile_and_exec(filename, *args, **kwargs):
+    sys.argv = list(args)
     with open(filename) as f_obj:
         src = f_obj.read()
         code = compile(src, filename, 'exec')
         with type_inferencer.TypeInferencer() as ti:
-            exec(code)
+#             exec(code, globals())
+            try:
+                exec(code, globals())
+            except SystemExit:
+                # Trap code that calls exit()
+                pass
+        print('ti.pretty_format()')
         print(ti.pretty_format())
-
     
 def main():
     program_version = "v%s" % '0.1.1'
@@ -76,14 +82,18 @@ USAGE
                          default="stubs",
                          help="Directory to write stubs files. [default: %(default)s]")
     parser.add_argument(dest="args", nargs='+', help="Arguments to execute.")
-    args = parser.parse_args()
+    cli_args = parser.parse_args()
     logFormat = '%(asctime)s %(levelname)-8s %(message)s'
-    logging.basicConfig(level=args.loglevel,
+    logging.basicConfig(level=cli_args.loglevel,
                         format=logFormat,
                         # datefmt='%y-%m-%d % %H:%M:%S',
                         stream=sys.stdout)
-    print(args)
-#     compile_and_exec(filename)#, *args, **kwargs)    
+    print('sys.argv:', sys.argv)
+#     sys.argv = cli_args.args[1:]
+#     print('sys.argv:', sys.argv)
+    print(cli_args)
+    filename = cli_args.args[0]
+    compile_and_exec(filename, *cli_args.args[1:])
     return 0
 
 if __name__ == '__main__':

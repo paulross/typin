@@ -178,18 +178,19 @@ class TypeInferencer(object):
         q_name = ''
         bases = tuple()
         fn_obj = None
-        for fn_obj in gc.get_objects():
+        for _fn_obj in gc.get_objects():
             # See:
             # https://stackoverflow.com/questions/1132543/getting-callable-object-from-the-frame
             # Py2: if o.func_code is frame.f_code:
-            if inspect.isfunction(fn_obj) and fn_obj.__code__ is frame.f_code:
+            if inspect.isfunction(_fn_obj) and _fn_obj.__code__ is frame.f_code:
 #                 idx = fn_obj.__qualname__.find('<locals>')
 #                 if idx == -1:
 #                     q_name = fn_obj.__qualname__
 #                 else:
 #                     # Strip prefix
 #                     q_name = fn_obj.__qualname__[idx + len('<locals>') + 1:]
-                q_name = self._strip_locals_from_qualified_name(fn_obj.__qualname__)
+                q_name = self._strip_locals_from_qualified_name(_fn_obj.__qualname__)
+                fn_obj = _fn_obj
                 break
         if fn_obj is not None:
             for class_obj in gc.get_objects():
@@ -208,12 +209,14 @@ class TypeInferencer(object):
 
     def __call__(self, frame, event, arg):
         logging.debug('TypeInferencer.__call__', event, arg)
-        if event in ('call', 'return', 'exception'):
-            frame_info = inspect.getframeinfo(frame)
-            file_path = frame_info.filename
+        frame_info = inspect.getframeinfo(frame)
+#         print('TypeInferencer.__call__', event, arg, frame_info)
+        if event in ('call', 'return', 'exception'):# and frame_info.filename != '<module>':
+            file_path = os.path.abspath(frame_info.filename)
             # TODO: For methods use __qualname__
-            function_name = frame_info.function
+#             function_name = frame_info.function
             lineno = frame_info.lineno
+            
             
 #             print()
 #             print(function_name)
@@ -265,18 +268,19 @@ class TypeInferencer(object):
             
 #             func_types = self._get_func_data(file_path, function_name)
             q_name, bases = self._qualified_name(frame)
-            self._set_bases(file_path, q_name, bases)
-            func_types = self._get_func_data(file_path, q_name)
-            if event == 'call':
-                # arg is None
-                func_types.add_call(inspect.getargvalues(frame), file_path, lineno)
-            elif event == 'return':
-                # arg is return value
-                func_types.add_return(arg, lineno)
-            else:
-                assert event == 'exception'
-                # arg is a tuple (exception_type, exception_value, traceback)
-                func_types.add_exception(arg[1], lineno)
+            if q_name != '':
+                self._set_bases(file_path, q_name, bases)
+                func_types = self._get_func_data(file_path, q_name)
+                if event == 'call':
+                    # arg is None
+                    func_types.add_call(inspect.getargvalues(frame), file_path, lineno)
+                elif event == 'return':
+                    # arg is return value
+                    func_types.add_return(arg, lineno)
+                else:
+                    assert event == 'exception'
+                    # arg is a tuple (exception_type, exception_value, traceback)
+                    func_types.add_exception(arg[1], lineno)
         return self
     
     def __enter__(self):
