@@ -18,15 +18,8 @@ def test_creation():
     t = type_inferencer.TypeInferencer()
     assert t is not None
 
-
-def func_single_arg_no_return(arg):
-    pass
-
-def func_single_arg_return_arg(arg):
-    return arg
-
-def _pretty_print(ti):
-    print(ti.pretty_format())
+# def _pretty_print(ti):
+#     print(ti.pretty_format())
 
 # def _pretty_format(ti, file=None):
 #     str_list = []
@@ -49,7 +42,12 @@ def _pretty_print(ti):
 #                 )
 #     return '\n'.join(str_list)
 
-def test_single_function():
+def test_a_couple_of_functions():
+    def func_single_arg_no_return(arg):
+        pass
+    
+    def func_single_arg_return_arg(arg):
+        return arg
     with type_inferencer.TypeInferencer() as ti:
         func_single_arg_no_return('string')
         func_single_arg_return_arg('string')
@@ -62,6 +60,24 @@ def test_single_function():
         'def func_single_arg_return_arg(arg: str) -> str: ...',
     ]
     assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_a_couple_of_functions_with_line_numbers():
+    line_fn_1 = inspect.currentframe().f_lineno + 1
+    def func_single_arg_no_return(arg):
+        pass
+    
+    line_fn_2 = inspect.currentframe().f_lineno + 1
+    def func_single_arg_return_arg(arg):
+        return arg
+
+    with type_inferencer.TypeInferencer() as ti:
+        func_single_arg_no_return('string')
+        func_single_arg_return_arg('string')
+    expected = [
+        'def func_single_arg_no_return(arg: str) -> None: ...#{:d}'.format(line_fn_1),
+        'def func_single_arg_return_arg(arg: str) -> str: ...#{:d}'.format(line_fn_2),
+    ]
+    assert ti.pretty_format(__file__, add_line_number_as_comment=True) == '\n'.join(expected)
 
 def test_single_function_that_raises():
     line_raises = inspect.currentframe().f_lineno + 2
@@ -793,5 +809,5 @@ def test_file_filtering():
     assert ti.pretty_format(__file__) == '\n'.join(expected)
     assert ti.file_paths_filtered(
         file_path_prefix=os.path.dirname(__file__),
-        relative=True) == [os.path.basename(__file__)]
-    assert ti.file_paths_cwd(relative=True) == ['tests/unit/test_type_inferencer.py']
+        relative=True) == [(__file__, os.path.basename(__file__))]
+#     assert ti.file_paths_cwd(relative=True) == [(__file__, 'tests/unit/test_type_inferencer.py')]

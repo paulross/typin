@@ -12,7 +12,7 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    'Click>=6.0',
+#     'Click>=6.0',
     # TODO: put package requirements here
 ]
 
@@ -38,7 +38,7 @@ setup(
     package_dir={'':'src'},
     entry_points={
         'console_scripts': [
-#            'typin=typin.cli:main'
+            'typin_cli=typin.typin_cli:main'
         ]
     },
     include_package_data=True,
@@ -48,16 +48,16 @@ setup(
     keywords='typin',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
+        'Environment :: Console',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        "Programming Language :: Python :: 2",
-        'Programming Language :: Python :: 2.6',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 3 :: Only',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Topic :: Software Development',
+        'Topic :: Software Development :: Code Generators',
+        'Topic :: Software Development :: Testing',
     ],
     test_suite='tests',
     tests_require=test_requirements,

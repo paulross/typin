@@ -27,7 +27,20 @@ class TypeInferencer(object):
         self.class_bases = {} 
         # Allow re-entrancy with sys.settrace(function)
         self._trace_fn_stack = []
-        
+    
+    def file_paths(self):
+        """Returns the file paths seen as a dict keys object."""
+        return self.function_map.keys()
+    
+    def namespaces(self, file_path):
+        """Returns the namespaces seen the file as a dict keys object."""
+        return self.function_map[file_path].keys()
+    
+    def function_names(self, file_path, namespace):
+        """Returns the function names seen the file and namespace as a dict
+        keys object."""
+        return self.function_map[file_path][namespace].keys()
+    
     def function_types(self, file_path, namespace, function_name):
         """Returns the FunctionTypes object for the file_path, namespace and
         function_name. namespace will be '' for global functions.
@@ -37,17 +50,18 @@ class TypeInferencer(object):
     def file_paths_filtered(self, file_path_prefix=os.sep, relative=False):
         """Returns a list of file paths seen that have the prefix when that is
         converted to an absolute path e.g. os.getcwd().
+        If relative then a list of tuples is returned [(key, suffix), ...]
         The default arguments mean that all paths are returned."""
         abs_path = os.path.abspath(os.path.normpath(file_path_prefix))
         ret_val = [k for k in self.function_map.keys() if k.startswith(abs_path)]
         if relative:
-            ret_val = [v[len(abs_path)+1:] for v in ret_val]
+            ret_val = [(v, v[len(abs_path)+1:]) for v in ret_val]
         return ret_val
     
-    def file_paths_cwd(self, relative=False):
-        """Returns a list of file paths seen that are below the current
-        working directory."""
-        return self.file_paths_filtered(os.getcwd(), relative=relative)
+#     def file_paths_cwd(self, relative=False):
+#         """Returns a list of file paths seen that are below the current
+#         working directory."""
+#         return self.file_paths_filtered(os.getcwd(), relative=relative)
     
     def _pformat_class_line(self, file_path, prefix, class_name_stack):
         assert len(class_name_stack) > 0, \
@@ -76,7 +90,7 @@ class TypeInferencer(object):
             base_str = ''
         return '{:s}class {:s}{:s}:'.format(prefix, class_name_stack[-1], base_str)
     
-    def _pformat_file(self, file_path):
+    def _pformat_file(self, file_path, add_line_number_as_comment):
         # file_map is { namespace : { function_name : FunctionTypes, ...}
         file_map = self.function_map[file_path]
 #         pprint.pprint(file_map)
@@ -111,23 +125,26 @@ class TypeInferencer(object):
                                                          namespace_stack))
                 prefix += self.INDENT
             for function_name in sorted(file_map[namespace]):
+                fts = file_map[namespace][function_name]
                 str_list.append('{:s}def {:s}{:s}'.format(
                     prefix,
                     function_name,
-                    file_map[namespace][function_name].stub_file_str()
+                    fts.stub_file_str()
                     )
                 )
+                if add_line_number_as_comment:
+                    str_list[-1] = str_list[-1] + '#{:d}'.format(fts.line_range[0])
         return str_list
 
-    def pretty_format(self, file=None):
+    def pretty_format(self, file=None, add_line_number_as_comment=False):
         str_list = []
         # {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         if file is None:
             for file_path in sorted(self.function_map.keys()):
                 str_list.append('File: {:s}'.format(file_path))
-                str_list.extend(self._pformat_file(file_path))
+                str_list.extend(self._pformat_file(file_path, add_line_number_as_comment))
         else:
-            str_list.extend(self._pformat_file(file))
+            str_list.extend(self._pformat_file(file, add_line_number_as_comment))
         return '\n'.join(str_list)
                 
     def _get_func_data(self, file_path, qualified_name):
@@ -208,8 +225,23 @@ class TypeInferencer(object):
         return q_name, bases
 
     def __call__(self, frame, event, arg):
-        logging.debug('TypeInferencer.__call__', event, arg)
         frame_info = inspect.getframeinfo(frame)
+        try:
+            logging.debug(
+                'TypeInferencer.__call__({!r:s}, {!r:s}): function: {:s} file: {:s}#{:d}'.format(
+                    event, arg, frame_info.function, frame_info.filename, frame_info.lineno
+                )
+            )
+        except Exception:
+            # This can happen when calling __repr__ on partially constructed objects
+            # For example with argparse:
+            # AttributeError: 'ArgumentParser' object has no attribute 'prog'
+            logging.warning(
+                'TypeInferencer.__call__(): failed, function: {:s} file: {:s}#{:d}'.format(
+                    frame_info.function, frame_info.filename, frame_info.lineno
+                )
+            )
+            pass
 #         print('TypeInferencer.__call__', event, arg, frame_info)
         if event in ('call', 'return', 'exception'):# and frame_info.filename != '<module>':
             file_path = os.path.abspath(frame_info.filename)
@@ -268,6 +300,10 @@ class TypeInferencer(object):
             
 #             func_types = self._get_func_data(file_path, function_name)
             q_name, bases = self._qualified_name(frame)
+            logging.debug(
+                'TypeInferencer.__call__(): q_name="{:s}", bases={!r:s})'.format(
+                    q_name, bases
+            ))
             if q_name != '':
                 self._set_bases(file_path, q_name, bases)
                 func_types = self._get_func_data(file_path, q_name)
@@ -309,4 +345,6 @@ class TypeInferencer(object):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
+        # TODO: Check what is sys.gettrace(), if it is not self someone has
+        # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())
