@@ -27,7 +27,27 @@ class TypeInferencer(object):
         self.class_bases = {} 
         # Allow re-entrancy with sys.settrace(function)
         self._trace_fn_stack = []
-    
+        
+    def dump(self, stream=sys.stdout):
+        stream.write('TypeInferencer.dump():\n')
+#         for attr in ('function_map', 'class_bases'):
+#             assert hasattr(self, attr)
+#             obj = getattr(self, attr)
+#             print(attr, obj)
+#             stream.write('self.{:s}:\n{:s}\n'.format(
+#                 pprint.pformat(obj)
+#             ))
+        for file_path in sorted(self.function_map.keys()):
+            stream.write('File: {:s}\n'.format(file_path))
+            for namespace in sorted(self.function_map[file_path].keys()):
+                stream.write('  Namespace: "{:s}"\n'.format(namespace))
+                for function in sorted(self.function_map[file_path][namespace].keys()):
+                    stream.write(
+                        '    Function: "{:s}" {!r:s}\n'.format(
+                            function, self.function_map[file_path][namespace][function]
+                        )
+                    )
+        
     def file_paths(self):
         """Returns the file paths seen as a dict keys object."""
         return self.function_map.keys()

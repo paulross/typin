@@ -27,6 +27,7 @@ def compile_and_exec(root_path, stubs_dir, filename, *args, **kwargs):
         for key, file_path in file_paths:
             print(os.path.join(stubs_dir, file_path))
             print(ti.pretty_format(key))
+        ti.dump()
             
     
 def main():

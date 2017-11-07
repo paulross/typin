@@ -172,12 +172,41 @@ class FunctionTypes:
         # TODO: Track call/return type pairs so we can use the @overload
         # decorator in the .pyi files.
         
-    @property
-    def exception_type_strings(self):
+    def __repr__(self):
+        """Dump of the internal representation."""
+        def _str_list_add_dict(title, d, l):
+            sub_l = ['{:s}:'.format(title)]
+            if len(d):
+                for k, v in d.items():
+                    sub_l.append('{!r:s} -> {!r:s}'.format(k, v))
+            else:
+                sub_l.append('N/A'.format(title))
+            l.append(' '.join(sub_l))
+            
+        str_l = []
+        _str_list_add_dict('Argument types', self.argument_type_strings, str_l)
+        _str_list_add_dict('Return types', self.return_type_strings, str_l)
+        _str_list_add_dict('Exceptions', self.exception_type_strings, str_l)
+        str_l.append('Entry points: {!r:s}'.format(self.call_line_numbers))
+        return ', '.join(str_l)
+    
+    def _stringify_dict_of_set(self, dofs):
         ret = {}
-        for k, v in self._exception_types.items():
+        for k, v in dofs.items():
             ret[k] = set([str(t) for t in v])
         return ret
+        
+    @property
+    def argument_type_strings(self):
+        return self._stringify_dict_of_set(self.arguments)
+
+    @property
+    def return_type_strings(self):
+        return self._stringify_dict_of_set(self.return_types)
+
+    @property
+    def exception_type_strings(self):
+        return self._stringify_dict_of_set(self._exception_types)
 
     @property
     def line_range(self):
@@ -265,8 +294,6 @@ class FunctionTypes:
                 ', '.join((self._type(str(t)) for t in return_types)))
             )
         return ' '.join(sl)
-    
-    __repr__ = __str__
     
     def _type(self, name):
         """Translates a type name if necessary."""
