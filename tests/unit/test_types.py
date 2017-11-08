@@ -218,7 +218,7 @@ def test_FunctionTypes_add_call_add_return():
     # def function(i):
     #    return 2 * 1
     ai = ArgInfo(['i'], None, None, {'i' : 42})
-    fts.add_call(ai, '/fo/bar/baz.py', 100)
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
     fts.add_return(84, 101)
     assert fts.stub_file_str() == '(i: int) -> int: ...'
     
@@ -228,9 +228,25 @@ def test_FunctionTypes_add_call_add_return__str__():
     # def function(i):
     #    return 2 * 1
     ai = ArgInfo(['i'], None, None, {'i' : 42})
-    fts.add_call(ai, '/fo/bar/baz.py', 100)
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    # (return_value, line_number)
     fts.add_return(84, 101)
     assert str(fts) == 'type: (i int) -> int'
+    
+def test_FunctionTypes_add_call_add_multiple_returns():
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def function(i):
+    #    if i > 0:
+    #        return i
+    #    return str(i)
+    ai = ArgInfo(['i'], None, None, {'i' : 42})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    # (return_value, line_number)
+    fts.add_return(84, 101)
+    fts.add_return('84', 102)
+    assert fts.stub_file_str() == '(i: int) -> Union[int, str]: ...'
+    assert fts.return_type_strings == {101: {'int'}, 102: {'str'}}
     
 def test_FunctionTypes_add_call_add_yield():
     fts = types.FunctionTypes()
@@ -238,18 +254,18 @@ def test_FunctionTypes_add_call_add_yield():
     # def function(i):
     #    yield 2 * 1
     ai = ArgInfo(['i'], None, None, {'i' : 42})
-    fts.add_call(ai, '/fo/bar/baz.py', 100)
-    fts.add_call(ai, '/fo/bar/baz.py', 101)
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    fts.add_call(ai, '/foo/bar/baz.py', 101)
     fts.add_return(84, 102)
     assert fts.stub_file_str() == '(i: int) -> int: ...'
     
-def test_FunctionTypes_add_call_add_yield_goes_back():
+def test_FunctionTypes_add_call_add_yield_goes_back_raises():
     fts = types.FunctionTypes()
     ai = ArgInfo(['i'], None, None, {'i' : 42})
-    fts.add_call(ai, '/fo/bar/baz.py', 100)
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
     with pytest.raises(ValueError):
         # Can't have a call prior to initial entry point
-        fts.add_call(ai, '/fo/bar/baz.py', 99)
+        fts.add_call(ai, '/foo/bar/baz.py', 99)
     
 def test_FunctionTypes_add_call_add_exception():
     fts = types.FunctionTypes()
@@ -259,10 +275,45 @@ def test_FunctionTypes_add_call_add_exception():
     #        raise ValueError('Some error')
     #    return i * 2
     ai = ArgInfo(['i'], None, None, {'i' : -1})
-    fts.add_call(ai, '/fo/bar/baz.py', 100)
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
     fts.add_exception(ValueError('Some error'), 102)
     fts.add_return(None, 102)
     ai = ArgInfo(['i'], None, None, {'i' : 1})
     fts.add_return(2, 103)
     assert fts.exception_type_strings == {102: {'ValueError'}}
     assert fts.stub_file_str() == '(i: int) -> int: ...'
+
+#---- docstring tests
+def test_FunctionTypes_docstring_sphinx_simple():
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def function(i):
+    #    return 2 * 1
+    ai = ArgInfo(['i'], None, None, {'i' : 42})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    # (return_value, line_number)
+    fts.add_return(84, 101)
+#     print()
+#     print(fts.docstring('sphinx'))
+    expected = (
+        101,
+        """<insert documentation for function>
+:param i: <insert documentation for argument>
+:type i: int
+:returns: int -- <insert documentation for return values>"""
+    )
+    assert fts.docstring('sphinx') == expected
+
+@pytest.mark.xfail(reason='google style not yet supported')
+def test_FunctionTypes_docstring_google_simple():
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def function(i):
+    #    return 2 * 1
+    ai = ArgInfo(['i'], None, None, {'i' : 42})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    # (return_value, line_number)
+    fts.add_return(84, 101)
+    assert fts.docstring('google') == ''
+
+#---- END: docstring tests

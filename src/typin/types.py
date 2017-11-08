@@ -191,7 +191,7 @@ class FunctionTypes:
         return ', '.join(str_l)
     
     def _stringify_dict_of_set(self, dofs):
-        ret = {}
+        ret = type(dofs)()
         for k, v in dofs.items():
             ret[k] = set([str(t) for t in v])
         return ret
@@ -209,14 +209,29 @@ class FunctionTypes:
         return self._stringify_dict_of_set(self._exception_types)
 
     @property
+    def line_decl(self):
+        if len(self.call_line_numbers) == 0:
+            raise FunctionTypesExceptionNoData()
+        return self.call_line_numbers[0]
+        
+    @property
     def line_range(self):
         if len(self.call_line_numbers) == 0:
             raise FunctionTypesExceptionNoData()
         return self.call_line_numbers[0], self.max_line_number
+    
+    def _check_line_number(self, line_number, file_path=''):
+        assert len(self.call_line_numbers) > 0
+        # Sanity check: Call sites, can increase when using yield statements
+        # but never can decrease. Similarly return line numbers and exception
+        # line numbers must be greater than the original call site.
+        if self.call_line_numbers[0] > line_number:
+            raise ValueError('Call site in "{:s}" goes backwards, was {:d} now {:d}'.format(
+                file_path, self.call_line_numbers[0], line_number)
+            )
         
     def add_call(self, arg_info, file_path, line_number):
         """Adds a function call from the frame."""
-        self.max_line_number = max(self.max_line_number, line_number)
         # arg_info is an ArgInfo object which is a named tuple from 
         # inspect.getargvalues(frame):
         # ArgInfo(args, varargs, keywords, locals):
@@ -238,10 +253,8 @@ class FunctionTypes:
                 self.call_line_numbers.append(line_number)
             # Sanity check: Call sites can increase when using yield statements
             # but never can decrease
-            if self.call_line_numbers[0] > line_number:
-                raise ValueError('Call site in {:s} goes backwards, was {:d} now {:d}'.format(
-                    file_path, self.call_line_numbers[0], line_number)
-                )
+            self._check_line_number(line_number, file_path)
+        self.max_line_number = max(self.max_line_number, line_number)
     
     def add_return(self, return_value, line_number):
         """Records a return value at a particular line number.
@@ -249,23 +262,25 @@ class FunctionTypes:
         this line then this is a phantom return value and must be ignored.
         See ``TypeInferencer.__enter__`` for a description of this.
         """
-        self.max_line_number = max(self.max_line_number, line_number)
         if return_value is None and line_number in self._exception_types:
-            # Ignore phantom return value
+            # Ignore phantom return value of None immediately after an exception
             return
         t = Type(return_value)
         try:
             self.return_types[line_number].add(t)
         except KeyError:
             self.return_types[line_number] = set([t])
+        self._check_line_number(line_number)
+        self.max_line_number = max(self.max_line_number, line_number)
         
     def add_exception(self, exception, line_number):
-        self.max_line_number = max(self.max_line_number, line_number)
         t = Type(exception)
         try:
             self._exception_types[line_number].add(t)
         except KeyError:
             self._exception_types[line_number] = set([t])
+        self._check_line_number(line_number)
+        self.max_line_number = max(self.max_line_number, line_number)
     
     def __str__(self):
         """Returns something like the annotation string."""
@@ -341,3 +356,52 @@ class FunctionTypes:
             )
         sl.append(': ...')
         return ''.join(sl)
+    
+    def _insert_doc_marker(self, suffix):
+        return '<insert documentation for {:s}>'.format(suffix)
+
+    def _docstring_sphinx(self):
+        str_l = []
+        str_l.append(self._insert_doc_marker('function'))
+        arg_types = self.argument_type_strings
+        # Arguments, optional
+        for arg, types in arg_types.items():
+            assert len(types) == 1
+            str_l.append(':param {:s}: {:s}'.format(
+                arg,
+                self._insert_doc_marker('argument'))
+            )
+            str_l.append(':type {:s}: {:s}'.format(arg, types.pop()))
+        # Returns
+        return_types = set()
+        for set_returns in self.return_type_strings.values():
+            return_types |= set_returns
+        # :returns:  int -- the return code.
+        str_l.append(
+            ':returns: {:s} -- {:s}'.format(
+                ','.join(sorted(return_types)),
+                self._insert_doc_marker('return values'),
+            )
+        )
+        # Exceptions, optional
+        if len(self._exception_types) > 0:
+            str_l.append(':raises: {:s}'.format(self.exception_type_strings()))
+        return '\n'.join(str_l)
+    
+#     def _docstring_google(self):
+#         str_l = []
+#         return '\n'.join(str_l)
+    
+    def docstring(self, style='sphinx'):
+        """Returns a pair (line_number, docstring) for this function. The
+        docstring is the __doc__ for the function and the line_number is the
+        docstring position (function declaration + 1).
+        So to insert into ``src``::
+            src[:line_number] + docstring + src[line_number:]
+            
+        style can be 'sphinx' or 'google'."""
+        despatch = {
+            'sphinx' : self._docstring_sphinx,
+#             'google' : self._docstring_google,
+        }
+        return self.line_decl + 1, despatch[style]()
