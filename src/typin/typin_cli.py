@@ -17,19 +17,51 @@ def compile_and_exec(root_path, stubs_dir, filename, *args, **kwargs):
         with type_inferencer.TypeInferencer() as ti:
 #             exec(code, globals())
             try:
-                exec(code, globals())
+                exec(code, globals())#, locals())
             except SystemExit:
                 # Trap CLI code that calls exit() or sys.exit()
                 pass
 #         print('ti.pretty_format()')
 #         print(ti.pretty_format())
+        print(' ti.pretty_format() '.center(75, '-'))
         file_paths = ti.file_paths_filtered(root_path, relative=True)
         for key, file_path in file_paths:
             print(os.path.join(stubs_dir, file_path))
             print(ti.pretty_format(key))
+        print(' ti.dump() '.center(75, '-'))
         ti.dump()
-            
-    
+
+class BaseClass:
+    def __init__(self):
+        pass
+
+class ExampleClass(BaseClass):
+    """An example class with a couple of methods that we exercise."""
+    def __init__(self, first_name, last_name):
+        super(ExampleClass, self).__init__()
+        self.first_name = first_name
+        self.last_name = last_name
+
+    def name(self):
+        ret = '{:s}, {:s}'.format(self.last_name, self.first_name)
+        return ret
+
+def example_function(x):
+    return 2 * x 
+
+def test():
+    with type_inferencer.TypeInferencer() as ti:
+        _val = example_function(12)
+        jane_doe = ExampleClass('Jane', 'Doe')
+        jane_doe.name()
+    file_paths = ti.file_paths_filtered()
+    print(' typin_cli.test() ti.pretty_format() '.center(75, '-'))
+    for file_path in file_paths:
+        print(file_path)
+        print(ti.pretty_format(file_path))
+    print(' typin_cli.test() ti.dump() '.center(75, '-'))
+    ti.dump()
+
 def main():
     program_version = "v%s" % '0.1.0'
     program_shortdesc = 'typin_cli - Infer types of Python functions.'
@@ -108,8 +140,9 @@ USAGE
 #     print('cli_args', cli_args)
     filename = cli_args.args[0]
     root_path = os.path.abspath(os.path.normpath(cli_args.root))
+    test()
     compile_and_exec(root_path, cli_args.stubs, filename, *cli_args.args[1:])
     return 0
 
 if __name__ == '__main__':
-    exit(main())
+    sys.exit(main())

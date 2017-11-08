@@ -8,9 +8,10 @@ import inspect
 import logging
 import os
 import pprint
+import re
 import sys
 
-from typin import str_id_cache
+# from typin import str_id_cache
 from typin import types
 
 # TODO: How to create the taxonomy? collections.abc [Python3]?
@@ -18,6 +19,10 @@ from typin import types
 class TypeInferencer(object):
     """Infers types of function arguments and return values at runtime."""
     INDENT = '    '
+    # Match a temporary file such as '<string>' or '<frozen importlib._bootstrap>'
+    # This is matched on os.path.basename 
+    RE_TEMPORARY_FILE = re.compile(r'<(.+)>')
+    GLOBAL_NAMESPACE = ''
     def __init__(self):
         """Constructor."""
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...} 
@@ -29,14 +34,11 @@ class TypeInferencer(object):
         self._trace_fn_stack = []
         
     def dump(self, stream=sys.stdout):
-        stream.write('TypeInferencer.dump():\n')
-#         for attr in ('function_map', 'class_bases'):
-#             assert hasattr(self, attr)
-#             obj = getattr(self, attr)
-#             print(attr, obj)
-#             stream.write('self.{:s}:\n{:s}\n'.format(
-#                 pprint.pformat(obj)
-#             ))
+        stream.write(' TypeInferencer.dump() '.center(75, '='))
+        stream.write('\n')
+        stream.write(' self.function_map '.center(75, '-'))
+        stream.write('\n')
+        # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...} 
         for file_path in sorted(self.function_map.keys()):
             stream.write('File: {:s}\n'.format(file_path))
             for namespace in sorted(self.function_map[file_path].keys()):
@@ -47,6 +49,29 @@ class TypeInferencer(object):
                             function, self.function_map[file_path][namespace][function]
                         )
                     )
+        stream.write(' END: self.function_map '.center(75, '-'))
+        stream.write('\n')
+        stream.write(' self.class_basses '.center(75, '-'))
+        stream.write('\n')
+        # dict of {file_path : { namespace : (__bases__, ...), ...}
+        for file_path in sorted(self.class_bases.keys()):
+            non_global_ns = [ns for ns in self.class_bases[file_path].keys()
+                             if ns != self.GLOBAL_NAMESPACE]
+            if len(non_global_ns):
+                stream.write(file_path)
+                stream.write('\n')
+                for ns in sorted(non_global_ns):
+                    if ns != self.GLOBAL_NAMESPACE:
+                        stream.write('{:s}{:s}: {!r:s}'.format(
+                           self.INDENT,
+                           ns,
+                           self.class_bases[file_path][ns]),
+                        )
+                        stream.write('\n')
+        stream.write(' END: self.class_basses '.center(75, '-'))
+        stream.write('\n')
+        stream.write(' END: TypeInferencer.dump() '.center(75, '='))
+        stream.write('\n')
         
     def file_paths(self):
         """Returns the file paths seen as a dict keys object."""
@@ -102,7 +127,7 @@ class TypeInferencer(object):
         bases_str = [types.Type.str_of_type(t) for t in bases_types]
         bases_str = [self._strip_locals_from_qualified_name(_v) for _v in bases_str]
         if 'object' in bases_str:
-            # Python2.7 - we might want to revise this
+            # For Python2.7 we might want to revise this
             bases_str.remove('object')
         if len(bases_str) > 0:
             base_str = '({:s})'.format(', '.join(bases_str))
@@ -117,7 +142,7 @@ class TypeInferencer(object):
         str_list = []
         for namespace in sorted(file_map.keys()):
             prefix = ''
-            if namespace:
+            if namespace != self.GLOBAL_NAMESPACE:
                 namespace_stack = namespace.split('.')
                 # If enclosing namespace(s) not in the map then we have an
                 # enclosing class with no methods of its own so just write out
@@ -175,7 +200,7 @@ class TypeInferencer(object):
         hierarchy = qualified_name.split('.')
         assert len(hierarchy) > 0
         if len(hierarchy) == 1:
-            namespace = ''
+            namespace = self.GLOBAL_NAMESPACE
             function_name = hierarchy[0]
         else:
             namespace = '.'.join(hierarchy[:-1])
@@ -187,6 +212,14 @@ class TypeInferencer(object):
         r = self.function_map[file_path][namespace][function_name]
         return r
     
+    def is_temporary_file(self, file_path):
+        """Returns True if the file_path is to a temporary file such as '<string>'
+        or:
+        /Users/USER/Documents/workspace/typin/src/typin/<frozen importlib._bootstrap>
+        """
+        m = self.RE_TEMPORARY_FILE.match(os.path.basename(file_path))
+        return m is not None
+    
     def _set_bases(self, file_path, q_name, bases):
         """classname including dotted scope."""
         parent_scope = '.'.join(q_name.split('.')[:-1])
@@ -195,13 +228,14 @@ class TypeInferencer(object):
         if parent_scope not in self.class_bases[file_path]:
             self.class_bases[file_path][parent_scope] = bases
         elif self.class_bases[file_path][parent_scope] != bases:
-#             print('TRACE:', str(bases))
-            raise ValueError('Bases changed for {:s} from {!r:s} to {!r:s}'.format(
-                    parent_scope,
-                    self.class_bases[file_path][parent_scope],
-                    bases,
+            if not self.is_temporary_file(file_path):
+                # Temporary files such as '<frozen importlib._bootstrap>'
+                raise ValueError('Bases changed for {:s} from {!r:s} to {!r:s}'.format(
+                        parent_scope,
+                        self.class_bases[file_path][parent_scope],
+                        bases,
+                    )
                 )
-            )
     
     def _strip_locals_from_qualified_name(self, qualified_name):
         idx = qualified_name.find('<locals>')
@@ -339,6 +373,31 @@ class TypeInferencer(object):
                     func_types.add_exception(arg[1], lineno)
         return self
     
+    def _cleanup(self):
+        """This does any spring cleaning once tracing has stopped.
+        The only thing this currently does is to remove spurious function calls
+        that appear when using exec() at the point of class declaration.
+        I don't understand why this is so but a function call event is generated
+        which ends up with the entry point the class declaration and the return
+        line the declaration of the last method.
+        """
+        # self.function_map is a dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
+        for file_path in self.function_map:
+            class_names = []
+            for ns in self.function_map[file_path]:
+                if ns != self.GLOBAL_NAMESPACE:
+                    class_names.append(ns.split('.')[-1])
+            names_to_remove = []
+            if self.GLOBAL_NAMESPACE in self.function_map[file_path]:
+                for function_name in  self.function_map[file_path][self.GLOBAL_NAMESPACE]:
+                    if function_name in class_names:
+                        names_to_remove.append(function_name)
+            if len(names_to_remove):
+                logging.debug('TypeInferencer._cleanup(): file: {:s}'.format(file_path))
+            for function_name in names_to_remove:
+                logging.debug('TypeInferencer._cleanup(): removing {:s}'.format(function_name))
+                del self.function_map[file_path][self.GLOBAL_NAMESPACE][function_name]
+    
     def __enter__(self):
         """Context manager sets the profiling function.
         We need to use ``sys.settrace()`` not ``sys.setprofile()`` as the
@@ -368,3 +427,4 @@ class TypeInferencer(object):
         # TODO: Check what is sys.gettrace(), if it is not self someone has
         # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())
+        self._cleanup()

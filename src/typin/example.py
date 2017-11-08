@@ -6,6 +6,8 @@ import sys
  
 import argparse
 
+import example_import
+
 class BaseClass:
     def __init__(self):
         pass
@@ -21,6 +23,27 @@ class ExampleClass(BaseClass):
         ret = '{:s}, {:s}'.format(self.last_name, self.first_name)
         return ret
 
+class OuterClass:
+    class InnerClass:
+        def __init__(self, value):
+            self._value = value
+            
+        def value(self):
+            return self._value
+            
+    def __init__(self, value):
+        self.outer_inner = OuterClass.InnerClass(value)
+
+    def value(self):
+        return self.outer_inner.value()
+
+class InnerClass:
+    def __init__(self, value):
+        self._value = value
+        
+    def value(self):
+        return self._value
+    
 def example_function(x):
     return 2 * x
 
@@ -34,6 +57,18 @@ def main():
     _val = example_function(12)
     jane_doe = ExampleClass('Jane', 'Doe')
     jane_doe.name()
+    outer = OuterClass('Hi there')
+    outer.value()
+    inner = InnerClass(b'Hi there')
+    inner.value()
+    # example_import
+    _val = example_import.example_function(12)
+    jane_doe = example_import.ExampleClass('Jane', 'Doe')
+    jane_doe.name()
+    outer = example_import.OuterClass('Hi there')
+    outer.value()
+    inner = example_import.InnerClass(b'Hi there')
+    inner.value()
     return 0
  
 if __name__ == "__main__":

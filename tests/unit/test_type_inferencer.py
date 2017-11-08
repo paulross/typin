@@ -18,6 +18,12 @@ def test_creation():
     t = type_inferencer.TypeInferencer()
     assert t is not None
 
+def test_RE_TEMPORARY_FILE():
+    ti = type_inferencer.TypeInferencer()
+    assert ti.is_temporary_file('<string>')
+    assert ti.is_temporary_file('/Users/USER/Documents/workspace/typin/src/typin/<frozen importlib._bootstrap>')
+    assert not ti.is_temporary_file('/Users/USER/Documents/workspace/typin/src/typin/typin_cli.py')
+
 # def _pretty_print(ti):
 #     print(ti.pretty_format())
 
