@@ -17,14 +17,21 @@ from typin import types
 # TODO: How to create the taxonomy? collections.abc [Python3]?
 
 class TypeInferencer(object):
-    """Infers types of function arguments and return values at runtime."""
+    """Infers types of function arguments and return values at runtime.
+    This is used as a context manager thus::
+    
+        with type_inferencer.TypeInferencer() as ti:
+            # Execute your code here...
+            
+        # Look at the data that ti has captured.
+    """
     INDENT = '    '
     # Match a temporary file such as '<string>' or '<frozen importlib._bootstrap>'
     # This is matched on os.path.basename 
     RE_TEMPORARY_FILE = re.compile(r'<(.+)>')
     GLOBAL_NAMESPACE = ''
     def __init__(self):
-        """Constructor."""
+        """Constructor, takes no arguments, merely initialises internal state."""
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...} 
         self.function_map = {}
         # Bases classes of a class from __bases__
@@ -34,6 +41,7 @@ class TypeInferencer(object):
         self._trace_fn_stack = []
         
     def dump(self, stream=sys.stdout):
+        """Dump the internal representation to a stream."""
         stream.write(' TypeInferencer.dump() '.center(75, '='))
         stream.write('\n')
         stream.write(' self.function_map '.center(75, '-'))
@@ -182,6 +190,7 @@ class TypeInferencer(object):
         return str_list
 
     def pretty_format(self, file=None, add_line_number_as_comment=False):
+        """Returns a pretty formatted string."""
         str_list = []
         # {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         if file is None:
@@ -191,7 +200,15 @@ class TypeInferencer(object):
         else:
             str_list.extend(self._pformat_file(file, add_line_number_as_comment))
         return '\n'.join(str_list)
-                
+    
+    def stub_file_str(self, file_path, namespace, function_name):
+        fts = self.function_types(file_path, namespace, function_name)
+        return 'def {:s}{:s}'.format(function_name, fts.stub_file_str())
+    
+    def docstring(self, file_path, namespace, function_name, style='sphinx'):
+        fts = self.function_types(file_path, namespace, function_name)
+        return fts.docstring(style)
+    
     def _get_func_data(self, file_path, qualified_name):
         """Return a FunctionTypes() object for the function, created if necessary."""
         if file_path not in self.function_map:
@@ -399,9 +416,10 @@ class TypeInferencer(object):
                 del self.function_map[file_path][self.GLOBAL_NAMESPACE][function_name]
     
     def __enter__(self):
-        """Context manager sets the profiling function.
+        """Context manager sets the profiling function. This saves the existing
+        tracing function.
         We need to use ``sys.settrace()`` not ``sys.setprofile()`` as the
-        latter does not see the exception.
+        latter does not see any exception raised.
         Suppose ``typin/src/typin/research.py`` raises an exception on line 41
         in function c() we will see the event::
             
@@ -424,6 +442,8 @@ class TypeInferencer(object):
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
+        """Exit the context manager. This performs some cleanup and then
+        restores the tracing function to that prior to ``__enter__``."""
         # TODO: Check what is sys.gettrace(), if it is not self someone has
         # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())

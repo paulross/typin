@@ -9,6 +9,14 @@ import inspect
 
 import re
 
+class TypesExceptionBase(Exception):
+    """Base class for exceptions thrown by the types module."""
+    pass
+
+class FunctionTypesExceptionNoData(TypesExceptionBase):
+    """Exception thrown when no call date has been added to a FunctionTypes object."""
+    pass
+
 @functools.total_ordering
 class Type(object):
     """This class holds type information extracted from a single object.
@@ -135,19 +143,16 @@ class Type(object):
 #     
 #     __repr__ = __str__
 
-class FunctionTypesExceptionBase(Exception):
-    pass
-
-class FunctionTypesExceptionNoData(FunctionTypesExceptionBase):
-    pass
-
 class FunctionTypes:
+    """Class that accumulate function call data such as call arguments,
+    return values and exceptions raised."""
     # Translate type names into typing parlance
     TYPE_NAME_TRANSLATION = {
         '_io.StringIO' : 'IO[bytes]',
         'NoneType' : 'None',
     }
     def __init__(self):
+        """Constructor, takes no arguments, merely initialises internal state."""
         super().__init__()
         # TODO: Track a range of line numbers.
         # 'call' must be always the same line number
@@ -198,24 +203,36 @@ class FunctionTypes:
         
     @property
     def argument_type_strings(self):
+        """A ``collections.OrderedDict`` of
+        ``{argument_name : set(types, ...), ...}`` where the types are strings."""
         return self._stringify_dict_of_set(self.arguments)
 
     @property
     def return_type_strings(self):
+        """A dict of ``{line_number : set(types, ...), ...}`` for the return
+        values where the return types are strings.
+        There should only be one type in the set."""
         return self._stringify_dict_of_set(self.return_types)
 
     @property
     def exception_type_strings(self):
+        """A dict of ``{line_number : set(types, ...), ...}`` for any exceptions
+        raised where the return types are strings.
+        There should only be one type in the set."""
         return self._stringify_dict_of_set(self._exception_types)
 
     @property
     def line_decl(self):
+        """Line number of the function declaration as an integer."""
         if len(self.call_line_numbers) == 0:
             raise FunctionTypesExceptionNoData()
         return self.call_line_numbers[0]
         
     @property
     def line_range(self):
+        """A pair of line numbers of the span of the function as integers.
+        The first is the declaration of the function, the last is the extreme
+        return point or exception."""
         if len(self.call_line_numbers) == 0:
             raise FunctionTypesExceptionNoData()
         return self.call_line_numbers[0], self.max_line_number
@@ -274,6 +291,7 @@ class FunctionTypes:
         self.max_line_number = max(self.max_line_number, line_number)
         
     def add_exception(self, exception, line_number):
+        """Add an exception."""
         t = Type(exception)
         try:
             self._exception_types[line_number].add(t)
@@ -315,7 +333,9 @@ class FunctionTypes:
         return self.TYPE_NAME_TRANSLATION.get(name, name)
         
     def stub_file_str(self):
-        """Example::
+        """A string suitable for writing to a stub file.
+        Example::
+        
             def encodebytes(s: bytes) -> bytes: ...
         """
         sl = ['(']
@@ -366,12 +386,11 @@ class FunctionTypes:
         arg_types = self.argument_type_strings
         # Arguments, optional
         for arg, types in arg_types.items():
-            assert len(types) == 1
             str_l.append(':param {:s}: {:s}'.format(
                 arg,
                 self._insert_doc_marker('argument'))
             )
-            str_l.append(':type {:s}: {:s}'.format(arg, types.pop()))
+            str_l.append(':type {:s}: {:s}'.format(arg, ', '.join(sorted(types))))
         # Returns
         return_types = set()
         for set_returns in self.return_type_strings.values():
@@ -385,7 +404,10 @@ class FunctionTypes:
         )
         # Exceptions, optional
         if len(self._exception_types) > 0:
-            str_l.append(':raises: {:s}'.format(self.exception_type_strings()))
+            excepts = set()
+            for e in self.exception_type_strings.values():
+                excepts |= e
+            str_l.append(':raises: {:s}'.format(', '.join(sorted(excepts))))
         return '\n'.join(str_l)
     
 #     def _docstring_google(self):
@@ -396,7 +418,8 @@ class FunctionTypes:
         """Returns a pair (line_number, docstring) for this function. The
         docstring is the __doc__ for the function and the line_number is the
         docstring position (function declaration + 1).
-        So to insert into ``src``::
+        So to insert into a list of lines called ``src``::
+        
             src[:line_number] + docstring + src[line_number:]
             
         style can be 'sphinx' or 'google'."""
