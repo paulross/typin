@@ -125,24 +125,6 @@ class Type(object):
             return m.group(1)
         raise ValueError('Can not parse object: "{:s}", type {:s}'.format(str(obj), str(type(obj))))
     
-# class TypesBase(object):
-#     TYPE_NAME_TRANSLATION = {
-#         '_io.StringIO' : 'IO[bytes]',
-#         'NoneType' : 'None',
-#     }
-# 
-# class ClassBaseTypes(TypesBase):
-#     """Holds the __bases__ of a class."""
-#     def __init__(self, obj):
-#         super().__init__()
-#         assert inspect.isclass(obj)
-#         self.bases = tuple(Type(o) for o in obj.__class__.__bases__)
-#         
-#     def __str__(self):
-#         return str(tuple([str(t) for t in self.bases]))
-#     
-#     __repr__ = __str__
-
 class FunctionTypes:
     """Class that accumulate function call data such as call arguments,
     return values and exceptions raised."""

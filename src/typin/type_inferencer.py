@@ -166,14 +166,12 @@ class TypeInferencer(object):
                 # Now write out all the enclosing empty classes
                 while i < len(namespace_stack) - 1:
                     prefix = self.INDENT * i
-#                     str_list.append('{:s}class {:s}:'.format(prefix, namespace_stack[i]))
                     str_list.append(self._pformat_class_line(file_path, prefix,
                                                              namespace_stack[:i+1],
                                                              ))
                     i += 1
                 # Continue with this base class
                 prefix = self.INDENT * (len(namespace_stack) - 1)
-#                 str_list.append('{:s}class {:s}:'.format(prefix, namespace_stack[-1]))
                 str_list.append(self._pformat_class_line(file_path, prefix,
                                                          namespace_stack))
                 prefix += self.INDENT
@@ -271,12 +269,6 @@ class TypeInferencer(object):
             # https://stackoverflow.com/questions/1132543/getting-callable-object-from-the-frame
             # Py2: if o.func_code is frame.f_code:
             if inspect.isfunction(_fn_obj) and _fn_obj.__code__ is frame.f_code:
-#                 idx = fn_obj.__qualname__.find('<locals>')
-#                 if idx == -1:
-#                     q_name = fn_obj.__qualname__
-#                 else:
-#                     # Strip prefix
-#                     q_name = fn_obj.__qualname__[idx + len('<locals>') + 1:]
                 q_name = self._strip_locals_from_qualified_name(_fn_obj.__qualname__)
                 fn_obj = _fn_obj
                 break
@@ -288,11 +280,7 @@ class TypeInferencer(object):
                 if inspect.isclass(class_obj) \
                 and fn_obj.__name__ in class_obj.__dict__ \
                 and class_obj.__dict__[fn_obj.__name__] == fn_obj:
-#                     bases = ClassBaseTypes(class_obj)
-#                     bases = class_obj.__class__.__bases__
                     bases = class_obj.__bases__
-#                     print('TRACE finding bases:', class_obj, class_obj.__class__, bases)
-#         print('TRACE:', q_name, bases)
         return q_name, bases
 
     def __call__(self, frame, event, arg):
@@ -313,63 +301,11 @@ class TypeInferencer(object):
                 )
             )
             pass
-#         print('TypeInferencer.__call__', event, arg, frame_info)
         if event in ('call', 'return', 'exception'):# and frame_info.filename != '<module>':
             file_path = os.path.abspath(frame_info.filename)
             # TODO: For methods use __qualname__
 #             function_name = frame_info.function
             lineno = frame_info.lineno
-            
-            
-#             print()
-#             print(function_name)
-#             print(inspect.getframeinfo(frame))
-#             print(frame)
-
-#             print(dir(frame))
-#             print(' Frame '.center(75, '-'))
-#             for attr in dir(frame):
-#                 if attr.startswith('_') or attr in ('f_builtins', ):#'f_globals'):
-#                     continue
-#                 if attr == 'f_globals':
-#                     pprint.pprint(getattr(frame, attr))
-#                 else:
-#                     print(attr, ':', type(getattr(frame, attr)), getattr(frame, attr))
-#             print(' END: Frame '.center(75, '-'))
-
-#             print(' GC Frame '.center(75, '-'))
-# #             import gc
-#             for o in gc.get_objects():
-#                 if inspect.isfunction(o):
-# #                     print(dir(o))
-# #                     print(o.__qualname__)
-#                     # See: https://stackoverflow.com/questions/1132543/getting-callable-object-from-the-frame
-#                     # Py2: if o.func_code is frame.f_code:
-#                     if o.__code__ is frame.f_code:
-#                         idx = o.__qualname__.find('<locals>')
-#                         if idx != -1:
-#                             name = o.__qualname__[idx + len('<locals>') + 1:]
-#                         else:
-#                             name = o.__qualname__
-#                         print(type(o), o, name) 
-#             print(' END: GC Frame '.center(75, '-'))
-# #             print(frame.f_code.co_name)
-# #             print(frame.f_globals[frame.f_code.co_name], frame.f_globals[frame.f_code.co_name].__qualname__)
-# 
-#             print(frame.f_code)
-#             print(dir(frame.f_code))
-
-#             print(self.__exit__.__qualname__)
-            
-#             print(' Code '.center(75, '-'))
-#             for attr in dir(frame.f_code):
-#                 if not attr.startswith('_'):
-#                     print(attr, ':', type(getattr(frame.f_code, attr)), getattr(frame.f_code, attr))
-#             print(' END Code '.center(75, '-'))
-
-#             print('Qualified name:', self._qualified_name(frame))
-            
-#             func_types = self._get_func_data(file_path, function_name)
             q_name, bases = self._qualified_name(frame)
             logging.debug(
                 'TypeInferencer.__call__(): q_name="{:s}", bases={!r:s})'.format(
@@ -398,7 +334,8 @@ class TypeInferencer(object):
         which ends up with the entry point the class declaration and the return
         line the declaration of the last method.
         """
-        # self.function_map is a dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
+        # self.function_map is a dict of:
+        # {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         for file_path in self.function_map:
             class_names = []
             for ns in self.function_map[file_path]:
@@ -444,7 +381,7 @@ class TypeInferencer(object):
     def __exit__(self, exc_type, exc_value, traceback):
         """Exit the context manager. This performs some cleanup and then
         restores the tracing function to that prior to ``__enter__``."""
-        # TODO: Check what is sys.gettrace(), if it is not self someone has
+        # TODO: Check what is sys.gettrace(), if it is not self then someone has
         # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())
         self._cleanup()
