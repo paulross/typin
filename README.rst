@@ -33,10 +33,6 @@ You can exercise this under the watchful gaze of ``typin``::
 
     with type_inferencer.TypeInferencer() as ti:
         assert function('Hi', 2) == 'Hi Hi'
-        try:
-            function('Hi', 0)
-        except ValueError:
-            pass
 
 You can then get the types that ``typin`` has observed as a string suitable for
 a stub file::
@@ -44,10 +40,7 @@ a stub file::
     ti.stub_file_str(__file__, '', 'function')
     # returns: 'def function(s: str, num: int) -> str: ...'
 
-Then adding code that provokes the exception we can track that as well:
-
-.. code-block:: python
-    :emphasize-lines: 5-8
+Then adding code that provokes the exception we can track that as well::
 
     from typin import type_inferencer
 
