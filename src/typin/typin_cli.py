@@ -63,6 +63,15 @@ def test():
     ti.dump()
 
 def main():
+    """Command line version of typin which executes arbitrary Python code and
+    for each function records all the types called, returned and raised.
+    For example::
+
+        python typin_cli.py --stubs=stubs example.py foo bar baz
+
+    This will execute ``example.py`` with the options ``foo bar baz`` under the
+    control of typin and write all the type annotations to the stubs/ directory.
+    """
     program_version = "v%s" % '0.1.0'
     program_shortdesc = 'typin_cli - Infer types of Python functions.'
     program_license = """%s

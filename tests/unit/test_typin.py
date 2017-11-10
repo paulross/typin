@@ -7,9 +7,7 @@ import pytest
 
 from click.testing import CliRunner
 
-from typin import typin
 from typin import cli
-
 
 @pytest.fixture
 def response():
