@@ -76,7 +76,10 @@ class Type(object):
         return r
 
     def __eq__(self, other):
-        return self._type == other._type
+        # other could be a type object not just a Type object
+        if hasattr(other, '_type'):
+            return self._type == other._type
+        return False
     
     def __lt__(self, other):
         return str(self._type) < str(other._type)

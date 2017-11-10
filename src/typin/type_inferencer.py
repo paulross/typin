@@ -235,7 +235,7 @@ class TypeInferencer(object):
         m = self.RE_TEMPORARY_FILE.match(os.path.basename(file_path))
         return m is not None
     
-    def _set_bases(self, file_path, q_name, bases):
+    def _set_bases(self, file_path, lineno, q_name, bases):
         """classname including dotted scope."""
         parent_scope = '.'.join(q_name.split('.')[:-1])
         if file_path not in self.function_map:
@@ -243,9 +243,21 @@ class TypeInferencer(object):
         if parent_scope not in self.class_bases[file_path]:
             self.class_bases[file_path][parent_scope] = bases
         elif self.class_bases[file_path][parent_scope] != bases:
+#             if not self.is_temporary_file(file_path):
+#                 # Temporary files such as '<frozen importlib._bootstrap>'
+#                 raise ValueError('In {:s}#{:d} bases changed for {:s} from {!r:s} to {!r:s}'.format(
+#                         file_path,
+#                         lineno,
+#                         parent_scope,
+#                         self.class_bases[file_path][parent_scope],
+#                         bases,
+#                     )
+#                 )
             if not self.is_temporary_file(file_path):
-                # Temporary files such as '<frozen importlib._bootstrap>'
-                raise ValueError('Bases changed for {:s} from {!r:s} to {!r:s}'.format(
+                logging.warning(
+                    'In {:s}#{:d} bases changed for {:s} from {!r:s} to {!r:s}'.format(
+                        file_path,
+                        lineno,
                         parent_scope,
                         self.class_bases[file_path][parent_scope],
                         bases,
@@ -312,18 +324,21 @@ class TypeInferencer(object):
                     q_name, bases
             ))
             if q_name != '':
-                self._set_bases(file_path, q_name, bases)
-                func_types = self._get_func_data(file_path, q_name)
-                if event == 'call':
-                    # arg is None
-                    func_types.add_call(inspect.getargvalues(frame), file_path, lineno)
-                elif event == 'return':
-                    # arg is return value
-                    func_types.add_return(arg, lineno)
-                else:
-                    assert event == 'exception'
-                    # arg is a tuple (exception_type, exception_value, traceback)
-                    func_types.add_exception(arg[1], lineno)
+                try:
+                    self._set_bases(file_path, lineno, q_name, bases)
+                    func_types = self._get_func_data(file_path, q_name)
+                    if event == 'call':
+                        # arg is None
+                        func_types.add_call(inspect.getargvalues(frame), file_path, lineno)
+                    elif event == 'return':
+                        # arg is return value
+                        func_types.add_return(arg, lineno)
+                    else:
+                        assert event == 'exception'
+                        # arg is a tuple (exception_type, exception_value, traceback)
+                        func_types.add_exception(arg[1], lineno)
+                except Exception as err:
+                    logging.error(str(err))
         return self
     
     def _cleanup(self):

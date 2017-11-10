@@ -8,6 +8,7 @@ import sys
 from typin import type_inferencer
 
 def compile_and_exec(root_path, stubs_dir, filename, *args, **kwargs):
+    print('TRACE:', root_path, stubs_dir, filename, args)
     sys.argv = [filename] + list(args)
     logging.debug('typein_cli.compile_and_exec({:s})'.format(filename))
     with open(filename) as f_obj:
@@ -134,9 +135,11 @@ USAGE
                          dest="root",
                          default=".",
                          help="Root path of the Python packages to generate stub files for. [default: %(default)s]")
-    parser.add_argument(dest="args", nargs='+',
-                        help="Arguments to execute, the first argument is the Python script to"
-                        " call. The rest of the arguments are passed to that script.")
+    parser.add_argument(dest="program",
+                        help="Python target file to be compiled and executed.")
+    parser.add_argument(dest="argstring",
+                        help="Argument as a string to give to the target."
+                        " Prefix this with '--' to avoid them getting consumed by typin_cli.py")
     cli_args = parser.parse_args()
     logFormat = '%(asctime)s %(levelname)-8s %(message)s'
     logging.basicConfig(level=cli_args.loglevel,
@@ -147,10 +150,10 @@ USAGE
 #     sys.argv = cli_args.args[1:]
 #     print('sys.argv:', sys.argv)
 #     print('cli_args', cli_args)
-    filename = cli_args.args[0]
     root_path = os.path.abspath(os.path.normpath(cli_args.root))
-    test()
-    compile_and_exec(root_path, cli_args.stubs, filename, *cli_args.args[1:])
+#     test()
+    target_args = cli_args.argstring.split(' ')
+    compile_and_exec(root_path, cli_args.stubs, cli_args.program, *target_args)
     return 0
 
 if __name__ == '__main__':
