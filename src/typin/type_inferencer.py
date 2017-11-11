@@ -237,6 +237,7 @@ class TypeInferencer(object):
     
     def _set_bases(self, file_path, lineno, q_name, bases):
         """classname including dotted scope."""
+#         print('_set_bases:', file_path, lineno, q_name, bases)
         parent_scope = '.'.join(q_name.split('.')[:-1])
         if file_path not in self.function_map:
             self.class_bases[file_path] = {}
@@ -274,25 +275,52 @@ class TypeInferencer(object):
     def _qualified_name(self, frame):
         # The qualified name of the function 
         q_name = ''
-        bases = tuple()
+        bases = None
         fn_obj = None
+        function_name = ''
         for _fn_obj in gc.get_objects():
             # See:
             # https://stackoverflow.com/questions/1132543/getting-callable-object-from-the-frame
             # Py2: if o.func_code is frame.f_code:
             if inspect.isfunction(_fn_obj) and _fn_obj.__code__ is frame.f_code:
+#                 print('TRACE: _fn_obj', _fn_obj, _fn_obj.__qualname__, _fn_obj.__name__)
                 q_name = self._strip_locals_from_qualified_name(_fn_obj.__qualname__)
                 fn_obj = _fn_obj
                 break
+        # Find the immediate namespace
+        q_list = q_name.split('.')
+        if len(q_list) > 1:
+            cls_name = '.'.join(q_list[:-1])
+            cls_name_leaf = q_list[-2]
+        else:
+            # Global
+            cls_name = ''
+            cls_name_leaf = ''
         if fn_obj is not None:
+            if fn_obj.__name__.startswith('__') and not fn_obj.__name__.endswith('__'):
+                # Name mangling: class A that has def __private the key is _A__private
+                function_name = '_{:s}{:s}'.format(cls_name_leaf, fn_obj.__name__)
+            else:
+                function_name = fn_obj.__name__
+#             print('function_name', function_name)
             for class_obj in gc.get_objects():
                 # Something like:
                 # function_object.__name__ in class_obj.__dict__
-                # and class_obj.__dict__[function_object.__name__] == function_object
+                # and class_obj.__dict__[function_name] == function_object
+#                 if inspect.isclass(class_obj):
+#                     print('class_obj.__dict__', class_obj.__name__, class_obj.__dict__.keys(), class_obj.__bases__)
                 if inspect.isclass(class_obj) \
-                and fn_obj.__name__ in class_obj.__dict__ \
-                and class_obj.__dict__[fn_obj.__name__] == fn_obj:
+                and function_name in class_obj.__dict__ \
+                and class_obj.__dict__[function_name] == fn_obj:
                     bases = class_obj.__bases__
+                    break
+        else:
+            logging.warning('Can not find function in frame')
+#         print('TRACE: _qualified_name():', q_name, bases)
+        if bases is None:
+            if cls_name != '':
+                logging.warning('Can not find bases for class "{:s}" method "{:s}"'.format(cls_name, function_name))
+            bases = tuple()
         return q_name, bases
 
     def __call__(self, frame, event, arg):

@@ -817,3 +817,172 @@ def test_file_filtering():
         file_path_prefix=os.path.dirname(__file__),
         relative=True) == [(__file__, os.path.basename(__file__))]
 #     assert ti.file_paths_cwd(relative=True) == [(__file__, 'tests/unit/test_type_inferencer.py')]
+
+def test_class_semie_private_methods():
+    class A:
+        pass
+    class B(A):
+        def public(self, value):
+            return self._semie_private(value)
+        
+        def _semie_private(self, value):
+            return '{!r:s}'.format(value)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = B()
+        b.public(14)
+    
+    expected = [
+        'class B(A):',
+        '    def _semie_private(self, value: int) -> str: ...',
+        '    def public(self, value: int) -> str: ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_private_methods():
+    class A:
+        pass
+    class B(A):
+        def public(self, value):
+            return self._semie_private(value)
+        
+        def _semie_private(self, value):
+            return self.__private(value)
+
+        def __private(self, value):
+            return '{!r:s}'.format(value)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = B()
+        b.public(14)
+    
+    expected = [
+        'class B(A):',
+        '    def __private(self, value: int) -> str: ...',
+        '    def _semie_private(self, value: int) -> str: ...',
+        '    def public(self, value: int) -> str: ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_private_methods_trailing_underscore():
+    class A:
+        pass
+    class B(A):
+        def public(self, value):
+            return self._semie_private(value)
+        
+        def _semie_private(self, value):
+            return self.__private_(value)
+
+        def __private_(self, value):
+            # One trailing underscore allowed.
+            return '{!r:s}'.format(value)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = B()
+        b.public(14)
+    
+    expected = [
+        'class B(A):',
+        '    def __private_(self, value: int) -> str: ...',
+        '    def _semie_private(self, value: int) -> str: ...',
+        '    def public(self, value: int) -> str: ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_private_methods_nested_class():
+    class A:
+        pass
+    class B(A):
+        class C:
+            def public(self, value):
+                return self._semie_private(value)
+            
+            def _semie_private(self, value):
+                return self.__private(value)
+    
+            def __private(self, value):
+                return '{!r:s}'.format(value)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = B.C()
+        b.public(14)
+    
+    expected = [
+        # NOTE: No inheritance of A by B
+        'class B:',
+        '    class C:',
+        '        def __private(self, value: int) -> str: ...',
+        '        def _semie_private(self, value: int) -> str: ...',
+        '        def public(self, value: int) -> str: ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_private_methods_nested_class_inherits():
+    class A:
+        def __init__(self):
+            pass
+    class B(A):
+        def __init__(self):
+            super().__init__()
+        class C:
+            def public(self, value):
+                return self._semie_private(value)
+            
+            def _semie_private(self, value):
+                return self.__private(value)
+    
+            def __private(self, value):
+                return '{!r:s}'.format(value)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = B()
+        c = b.C()
+        c.public(14)
+    
+    expected = [
+        # NOTE: Inheritance of A by B
+        'class A:',
+        '    def __init__(self) -> None: ...',
+        'class B(A):',
+        '    def __init__(self) -> None: ...',
+        '    class C:',
+        '        def __private(self, value: int) -> str: ...',
+        '        def _semie_private(self, value: int) -> str: ...',
+        '        def public(self, value: int) -> str: ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_properties():
+    class A:
+        @property
+        def get(self):
+            return id(self)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = A()
+        b.get
+    
+    expected = [
+        'class A:',
+        '    def get(self) -> int: ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
