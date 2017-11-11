@@ -1,5 +1,6 @@
 #!/usr/local/bin/python
 # -*- coding: utf-8 -*-
+import collections
 import os
 import pprint
 import sys
@@ -47,6 +48,8 @@ class InnerClass:
 def example_function(x):
     return 2 * x
 
+MyNT = collections.namedtuple('MyNT', 'a b c')
+
 def main():
 #     print('example.py: sys.argv:', sys.argv)
     parser = argparse.ArgumentParser(description='Example CLI',
@@ -61,6 +64,8 @@ def main():
     outer.value()
     inner = InnerClass(b'Hi there')
     inner.value()
+    nt = MyNT(1, 'B', b'C')
+    nt.a
     # example_import
     _val = example_import.example_function(12)
     jane_doe = example_import.ExampleClass('Jane', 'Doe')
@@ -69,6 +74,7 @@ def main():
     outer.value()
     inner = example_import.InnerClass(b'Hi there')
     inner.value()
+    
     return 0
  
 if __name__ == "__main__":

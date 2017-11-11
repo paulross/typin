@@ -3,6 +3,7 @@ Created on 22 Jun 2017
 
 @author: paulross
 '''
+import collections # To test problematic named tuple
 import base64 # Just used as an example of stdlib usage
 import inspect
 import io
@@ -986,3 +987,27 @@ def test_class_properties():
 #     pprint.pprint(ti.function_map)
 #     print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_named_tuple():
+    """Named tuples are weird."""
+    MyNT = collections.namedtuple('MyNT', 'a b c')
+    with type_inferencer.TypeInferencer() as ti:
+        nt = MyNT(1, 'B', b'C')
+        nt.a
+        nt.b
+        nt.c
+        print(dir(MyNT))
+        print(MyNT.__module__)
+        print(dir(MyNT.__new__))
+        print(locals())
+    
+    expected = [
+        'class A:',
+        '    def get(self) -> int: ...',
+    ]
+    print()
+#     pprint.pprint(ti.function_map)
+    for filename in ti.function_map.keys():
+        print(filename)
+        print(ti.pretty_format(filename))
+    assert ti.pretty_format(filename) == '\n'.join(expected)

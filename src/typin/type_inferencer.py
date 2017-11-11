@@ -10,6 +10,7 @@ import os
 import pprint
 import re
 import sys
+import traceback
 
 # from typin import str_id_cache
 from typin import types
@@ -367,6 +368,7 @@ class TypeInferencer(object):
                         func_types.add_exception(arg[1], lineno)
                 except Exception as err:
                     logging.error(str(err))
+                    logging.error(''.join(traceback.format_stack()))
         return self
     
     def _cleanup(self):
