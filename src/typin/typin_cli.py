@@ -68,7 +68,7 @@ def main():
     for each function records all the types called, returned and raised.
     For example::
 
-        python typin_cli.py --stubs=stubs example.py foo bar baz
+        python typin_cli.py --stubs=stubs -- example.py 'foo bar baz'
 
     This will execute ``example.py`` with the options ``foo bar baz`` under the
     control of typin and write all the type annotations to the stubs/ directory.

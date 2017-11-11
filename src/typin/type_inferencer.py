@@ -274,6 +274,20 @@ class TypeInferencer(object):
         return qualified_name[idx + len('<locals>') + 1:]
         
     def _qualified_name(self, frame):
+        """This takes a frame and discovers which function is being executed.
+        It then returns the qualified name of the function as a string and the
+        base classes (as a tuple of types) of the enclosing object (if any).
+        
+        This pretty flakey for a number of reasons:
+        
+        * It searches the whole garbage collector for live functions that match.
+          This is really expensive, surely there is a better way?
+        * It frequently fails to discover base class types for reasons not yet
+          well understood.
+
+        If this can be made more reliable then cacheing could help to make the
+        performance problem go away. 
+        """
         # The qualified name of the function 
         q_name = ''
         bases = None

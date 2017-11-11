@@ -69,7 +69,13 @@ the line number where it should be inserted::
     # documentation string is done by:
     # src[:line_number] + docstring + src[line_number:]
 
+There is a CLI interface ``typin/src/typin/typin_cli.py`` to execute arbitrary
+python code using ``compile()`` and ``exec()`` like this::
+    
+    python typin_cli.py --stubs=stubs -- example.py 'foo bar baz'
 
+This will ``compile()/exec()`` ``example.py`` with the arguments ``foo bar baz``
+and dump out the results.
 
 .. image:: https://img.shields.io/pypi/v/typin.svg
         :target: https://pypi.python.org/pypi/typin
