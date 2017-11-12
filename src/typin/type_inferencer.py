@@ -20,34 +20,36 @@ from typin import types
 class TypeInferencer(object):
     """Infers types of function arguments and return values at runtime.
     This is used as a context manager thus::
-    
+
         with type_inferencer.TypeInferencer() as ti:
             # Execute your code here...
-            
+
         # Look at the data that ti has captured.
     """
     INDENT = '    '
     # Match a temporary file such as '<string>' or '<frozen importlib._bootstrap>'
-    # This is matched on os.path.basename 
+    # This is matched on os.path.basename
     RE_TEMPORARY_FILE = re.compile(r'<(.+)>')
     GLOBAL_NAMESPACE = ''
-    def __init__(self):
+    def __init__(self, verbose=0):
         """Constructor, takes no arguments, merely initialises internal state."""
-        # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...} 
+        # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         self.function_map = {}
         # Bases classes of a class from __bases__
         # dict of {file_path : { namespace : (__bases__, ...), ...}
-        self.class_bases = {} 
+        self.class_bases = {}
         # Allow re-entrancy with sys.settrace(function)
         self._trace_fn_stack = []
-        
+        # Verbose oputput
+        self.verbose = verbose
+
     def dump(self, stream=sys.stdout):
         """Dump the internal representation to a stream."""
         stream.write(' TypeInferencer.dump() '.center(75, '='))
         stream.write('\n')
         stream.write(' self.function_map '.center(75, '-'))
         stream.write('\n')
-        # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...} 
+        # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         for file_path in sorted(self.function_map.keys()):
             stream.write('File: {:s}\n'.format(file_path))
             for namespace in sorted(self.function_map[file_path].keys()):
@@ -81,26 +83,26 @@ class TypeInferencer(object):
         stream.write('\n')
         stream.write(' END: TypeInferencer.dump() '.center(75, '='))
         stream.write('\n')
-        
+
     def file_paths(self):
         """Returns the file paths seen as a dict keys object."""
         return self.function_map.keys()
-    
+
     def namespaces(self, file_path):
         """Returns the namespaces seen the file as a dict keys object."""
         return self.function_map[file_path].keys()
-    
+
     def function_names(self, file_path, namespace):
         """Returns the function names seen the file and namespace as a dict
         keys object."""
         return self.function_map[file_path][namespace].keys()
-    
+
     def function_types(self, file_path, namespace, function_name):
         """Returns the FunctionTypes object for the file_path, namespace and
         function_name. namespace will be '' for global functions.
         May raise a KeyError."""
         return self.function_map[file_path][namespace][function_name]
-    
+
     def file_paths_filtered(self, file_path_prefix=os.sep, relative=False):
         """Returns a list of file paths seen that have the prefix when that is
         converted to an absolute path e.g. os.getcwd().
@@ -111,20 +113,20 @@ class TypeInferencer(object):
         if relative:
             ret_val = [(v, v[len(abs_path)+1:]) for v in ret_val]
         return ret_val
-    
+
 #     def file_paths_cwd(self, relative=False):
 #         """Returns a list of file paths seen that are below the current
 #         working directory."""
 #         return self.file_paths_filtered(os.getcwd(), relative=relative)
-    
+
     def _pformat_class_line(self, file_path, prefix, class_name_stack):
         assert len(class_name_stack) > 0, \
             'Class name stack {!r:s} must have one item.'.format(class_name_stack)
         scoped_name = '.'.join(class_name_stack)
-        
+
 #         print('TRACE self.class_bases:', '.'.join(scoped_name))
 #         pprint.pprint(self.class_bases)
-        
+
         try:
             bases_types = self.class_bases[file_path][scoped_name]
         except KeyError:
@@ -143,7 +145,7 @@ class TypeInferencer(object):
         else:
             base_str = ''
         return '{:s}class {:s}{:s}:'.format(prefix, class_name_stack[-1], base_str)
-    
+
     def _pformat_file(self, file_path, add_line_number_as_comment):
         # file_map is { namespace : { function_name : FunctionTypes, ...}
         file_map = self.function_map[file_path]
@@ -199,15 +201,15 @@ class TypeInferencer(object):
         else:
             str_list.extend(self._pformat_file(file, add_line_number_as_comment))
         return '\n'.join(str_list)
-    
+
     def stub_file_str(self, file_path, namespace, function_name):
         fts = self.function_types(file_path, namespace, function_name)
         return 'def {:s}{:s}'.format(function_name, fts.stub_file_str())
-    
+
     def docstring(self, file_path, namespace, function_name, style='sphinx'):
         fts = self.function_types(file_path, namespace, function_name)
         return fts.docstring(style)
-    
+
     def _get_func_data(self, file_path, qualified_name):
         """Return a FunctionTypes() object for the function, created if necessary."""
         if file_path not in self.function_map:
@@ -227,7 +229,7 @@ class TypeInferencer(object):
             self.function_map[file_path][namespace][function_name] = types.FunctionTypes()
         r = self.function_map[file_path][namespace][function_name]
         return r
-    
+
     def is_temporary_file(self, file_path):
         """Returns True if the file_path is to a temporary file such as '<string>'
         or:
@@ -235,7 +237,7 @@ class TypeInferencer(object):
         """
         m = self.RE_TEMPORARY_FILE.match(os.path.basename(file_path))
         return m is not None
-    
+
     def _set_bases(self, file_path, lineno, q_name, bases):
         """classname including dotted scope."""
 #         print('_set_bases:', file_path, lineno, q_name, bases)
@@ -265,30 +267,30 @@ class TypeInferencer(object):
                         bases,
                     )
                 )
-    
+
     def _strip_locals_from_qualified_name(self, qualified_name):
         idx = qualified_name.find('<locals>')
         if idx == -1:
             return qualified_name
         # Strip prefix
         return qualified_name[idx + len('<locals>') + 1:]
-        
+
     def _qualified_name(self, frame):
         """This takes a frame and discovers which function is being executed.
         It then returns the qualified name of the function as a string and the
         base classes (as a tuple of types) of the enclosing object (if any).
-        
+
         This pretty flakey for a number of reasons:
-        
+
         * It searches the whole garbage collector for live functions that match.
           This is really expensive, surely there is a better way?
         * It frequently fails to discover base class types for reasons not yet
           well understood.
 
         If this can be made more reliable then cacheing could help to make the
-        performance problem go away. 
+        performance problem go away.
         """
-        # The qualified name of the function 
+        # The qualified name of the function
         q_name = ''
         bases = None
         fn_obj = None
@@ -382,9 +384,10 @@ class TypeInferencer(object):
                         func_types.add_exception(arg[1], lineno)
                 except Exception as err:
                     logging.error(str(err))
-                    logging.error(''.join(traceback.format_stack()))
+                    if self.verbose > 1:
+                        logging.error(''.join(traceback.format_stack()))
         return self
-    
+
     def _cleanup(self):
         """This does any spring cleaning once tracing has stopped.
         The only thing this currently does is to remove spurious function calls
@@ -410,7 +413,7 @@ class TypeInferencer(object):
             for function_name in names_to_remove:
                 logging.debug('TypeInferencer._cleanup(): removing {:s}'.format(function_name))
                 del self.function_map[file_path][self.GLOBAL_NAMESPACE][function_name]
-    
+
     def __enter__(self):
         """Context manager sets the profiling function. This saves the existing
         tracing function.
@@ -418,11 +421,11 @@ class TypeInferencer(object):
         latter does not see any exception raised.
         Suppose ``typin/src/typin/research.py`` raises an exception on line 41
         in function c() we will see the event::
-            
+
             typin/src/typin/research.py 41 c return None
-        
+
         With ``sys.settrace()`` we get::
-        
+
             # c() raises. We can see this as an exception event is followed by
             # a return None with the same lineno.
             # Return None on its own is not enough as that might happen in the
@@ -436,7 +439,7 @@ class TypeInferencer(object):
         self._trace_fn_stack.append(sys.gettrace())
         sys.settrace(self)
         return self
-    
+
     def __exit__(self, exc_type, exc_value, traceback):
         """Exit the context manager. This performs some cleanup and then
         restores the tracing function to that prior to ``__enter__``."""
