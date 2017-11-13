@@ -31,6 +31,7 @@ class TypeInferencer(object):
     # This is matched on os.path.basename
     RE_TEMPORARY_FILE = re.compile(r'<(.+)>')
     GLOBAL_NAMESPACE = ''
+    FALSE_FUNCTION_NAMES = ('<dictcomp>', '<genexpr>', '<listcomp>', '<module>', '<setcomp>')
     def __init__(self, verbose=0):
         """Constructor, takes no arguments, merely initialises internal state."""
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
@@ -374,7 +375,7 @@ class TypeInferencer(object):
             pass
         # Only look at 'real' files and functions
         if self.RE_TEMPORARY_FILE.match(frame_info.filename) \
-        or frame_info.function in ('<genexpr>', '<module>', '<listcomp>'):
+        or frame_info.function in self.FALSE_FUNCTION_NAMES:
             # Ignore these.
             return self
         if event in ('call', 'return', 'exception'):# and frame_info.filename != '<module>':

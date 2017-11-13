@@ -996,10 +996,13 @@ def test_named_tuple():
         nt.a
         nt.b
         nt.c
+        nt.count(1)
+        print()
         print(dir(MyNT))
         print(MyNT.__module__)
         print(dir(MyNT.__new__))
         print(locals())
+        print(nt._fields)
     
     expected = [
         'class A:',
@@ -1011,3 +1014,57 @@ def test_named_tuple():
         print(filename)
         print(ti.pretty_format(filename))
     assert ti.pretty_format(filename) == '\n'.join(expected)
+    
+def _test_named_tuple_subclass():
+    """Named tuples are a bit awkward as they are equivelent to mere tuples.""" 
+    class Dim(collections.namedtuple('Dim', 'value units',)):
+        """Represents a dimension as an engineering value i.e. a number and units.""" 
+        __slots__ = ()
+    
+        def scale(self, factor):
+            """Returns a new Dim() scaled by a factor, units are unchanged."""
+            return self._replace(value=self.value*factor)
+    
+    with type_inferencer.TypeInferencer() as ti:
+        d = Dim(12, 'kilometers')
+        d.scale(10) # 120 kilometers
+        print()
+#         print(type(d))
+#         print(d._fields)
+        e = type(d)(*d)
+        print(e)
+        print(e._fields)
+        print(e.value)
+        print(e.units)
+        e.scale(.1)
+    
+    expected = [
+        'class Dim(tests.unit.test_type_inferencer.Dim):',
+        '    def scale(self, factor: int) -> tuple([int, str]): ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_list_comprehension_ignored():
+    with type_inferencer.TypeInferencer() as ti:
+        [i for i in range(8)]
+#     print()
+#     pprint.pprint(ti.function_map)
+    assert __file__ not in ti.function_map
+
+def test_dict_comprehension_ignored():
+    with type_inferencer.TypeInferencer() as ti:
+        {i : i for i in range(8)}
+#     print()
+#     pprint.pprint(ti.function_map)
+    assert __file__ not in ti.function_map
+
+def test_set_comprehension_ignored():
+    with type_inferencer.TypeInferencer() as ti:
+        {i for i in range(8)}
+    print()
+    pprint.pprint(ti.function_map)
+    assert __file__ not in ti.function_map
+

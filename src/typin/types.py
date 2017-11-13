@@ -30,6 +30,7 @@ class Type(object):
         """Constructor with an object. __ids is used internally to prevent
         infinite recursion when, for example, a list contains itself.
         This constructor decomposes the object into its types."""
+#         print('TRACE: Type.__init__:', type(obj))
         self._type = None
         # __ids is a set of ID values from id(object)
         if __ids is None:
@@ -52,7 +53,13 @@ class Type(object):
             elif isinstance(obj, tuple):
                 # Tuple: make an tuple of all types, we specify tuple as this block also
                 # deals with namedtuples and using type(obj) will cause __new__ to fail.
-                self._type = tuple([self._get_type(o, __ids) for o in obj])
+                if hasattr(obj, '_fields'):
+                    # Presume a named tuple
+#                     print('TRACE: namedtuple detected:', type(obj))
+                    self._type = type(obj)(*[self._get_type(o, __ids) for o in obj])
+                else:
+#                     print('TRACE: tuple detected:', type(obj))
+                    self._type = tuple([self._get_type(o, __ids) for o in obj])
             elif isinstance(obj, set):
                 # Set: insert unique types only by virtue of type(obj).
                 self._type = type(obj)([self._get_type(o, __ids) for o in obj])
