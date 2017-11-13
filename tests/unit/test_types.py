@@ -259,14 +259,6 @@ def test_FunctionTypes_add_call_add_yield():
     fts.add_return(84, 102)
     assert fts.stub_file_str() == '(i: int) -> int: ...'
     
-def test_FunctionTypes_add_call_add_yield_goes_back_raises():
-    fts = types.FunctionTypes()
-    ai = ArgInfo(['i'], None, None, {'i' : 42})
-    fts.add_call(ai, '/foo/bar/baz.py', 100)
-    with pytest.raises(ValueError):
-        # Can't have a call prior to initial entry point
-        fts.add_call(ai, '/foo/bar/baz.py', 99)
-    
 def test_FunctionTypes_add_call_add_exception():
     fts = types.FunctionTypes()
     # Simulate:

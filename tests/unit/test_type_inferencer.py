@@ -988,6 +988,82 @@ def test_class_properties():
 #     print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
+def test_class_properties():
+    class A:
+        @property
+        def get(self):
+            return id(self)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = A()
+        b.get
+    
+    expected = [
+        'class A:',
+        '    def get(self) -> int: ...',
+    ]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_properties_get_set():
+    class A:
+        def __init__(self, value):
+            self._value = value
+            
+        @property
+        def value(self):
+            return self._value
+        
+        @value.setter
+        def value(self, value):
+            self._value = value
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = A(21)
+        assert b.value == 21
+        b.value = 42
+        assert b.value == 42
+
+    expected = [
+        'class A:',
+        '    def __init__(self, value: int) -> None: ...',
+        '    def value(self, value: int) -> Union[None, int]: ...',
+    ]
+    print()
+    pprint.pprint(ti.function_map)
+    print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
+def test_class_properties_get_set_calls_reversed():
+    class A:
+        def __init__(self, value):
+            self._value = value
+            
+        @property
+        def value(self):
+            return self._value
+        
+        @value.setter
+        def value(self, value):
+            self._value = value
+        
+    with type_inferencer.TypeInferencer() as ti:
+        b = A(21)
+        b.value = 42
+        assert b.value == 42
+
+    expected = [
+        'class A:',
+        '    def __init__(self, value: int) -> None: ...',
+        '    def value(self, value: int) -> Union[None, int]: ...',
+    ]
+    print()
+    pprint.pprint(ti.function_map)
+    print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+
 def test_named_tuple():
     """Named tuples are weird."""
     MyNT = collections.namedtuple('MyNT', 'a b c')

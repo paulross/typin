@@ -5,7 +5,8 @@ Created on 17 Jul 2017
 '''
 import collections
 import functools
-import inspect
+# import inspect
+import sys
 
 import re
 
@@ -167,6 +168,12 @@ class FunctionTypes:
         # There should be at least one of these, possibly others for generators
         # where yield is a re-entry point
         self.call_line_numbers = []
+        # Line numbers:
+        # No general sanity check is possible on the ordering of line numbers
+        # since property setters and getters can be called in any order.
+        # Generators have a call site at declaration and each yield statement
+        # Smallest seen line number
+        self.min_line_number = sys.maxsize
         # Largest seen line number
         self.max_line_number = 0
         # TODO: Track call/return type pairs so we can use the @overload
@@ -235,17 +242,7 @@ class FunctionTypes:
         return point or exception."""
         if len(self.call_line_numbers) == 0:
             raise FunctionTypesExceptionNoData()
-        return self.call_line_numbers[0], self.max_line_number
-
-    def _check_line_number(self, line_number, file_path=''):
-        assert len(self.call_line_numbers) > 0
-        # Sanity check: Call sites, can increase when using yield statements
-        # but never can decrease. Similarly return line numbers and exception
-        # line numbers must be greater than the original call site.
-        if self.call_line_numbers[0] > line_number:
-            raise ValueError('Call site in "{:s}" goes backwards, was {:d} now {:d}'.format(
-                file_path, self.call_line_numbers[0], line_number)
-            )
+        return self.min_line_number, self.max_line_number
 
     def add_call(self, arg_info, file_path, line_number):
         """Adds a function call from the frame."""
@@ -269,9 +266,10 @@ class FunctionTypes:
             # Add a new entry point for yield statements
             if line_number not in self.call_line_numbers:
                 self.call_line_numbers.append(line_number)
-            # Sanity check: Call sites can increase when using yield statements
-            # but never can decrease
-            self._check_line_number(line_number, file_path)
+            # No general sanity check is possible on the ordering of line numbers
+            # since property setters and getters can be called in any order.
+            # Generators have a call site at declaration and each yield statement
+        self.min_line_number = min(self.min_line_number, line_number)
         self.max_line_number = max(self.max_line_number, line_number)
 
     def add_return(self, return_value, line_number):
@@ -288,7 +286,10 @@ class FunctionTypes:
             self.return_types[line_number].add(t)
         except KeyError:
             self.return_types[line_number] = set([t])
-        self._check_line_number(line_number)
+        # No general sanity check is possible on the ordering of line numbers
+        # since property setters and getters can be called in any order.
+        # Generators have a call site at declaration and each yield statement
+        self.min_line_number = min(self.min_line_number, line_number)
         self.max_line_number = max(self.max_line_number, line_number)
 
     def add_exception(self, exception, line_number):
@@ -298,7 +299,10 @@ class FunctionTypes:
             self._exception_types[line_number].add(t)
         except KeyError:
             self._exception_types[line_number] = set([t])
-        self._check_line_number(line_number)
+        # No general sanity check is possible on the ordering of line numbers
+        # since property setters and getters can be called in any order.
+        # Generators have a call site at declaration and each yield statement
+        self.min_line_number = min(self.min_line_number, line_number)
         self.max_line_number = max(self.max_line_number, line_number)
 
     def __str__(self):
