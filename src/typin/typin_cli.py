@@ -30,8 +30,10 @@ def write_all_stub_files(ti, stubs_dir):
                 try:
                     stream.write(ti.pretty_format(file_path, add_line_number_as_comment=True))
                 except Exception as err:
-                    logging.error('{:s}: {:s}'.format(type(err), str(err)))
-                    logging.error(''.join(traceback.format_stack()))
+                    logging.error('Could not write docstring to {:s}: {!r:s}: {:s}'.format(out_path, type(err), str(err)))
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    logging.error(''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+                    # logging.error(''.join(traceback.format_stack()))
                 stream.write('\n')
 
 def dump_docstrings(ti, stream=sys.stdout):
@@ -50,8 +52,10 @@ def dump_docstrings(ti, stream=sys.stdout):
                         line, docstring = ti.docstring(file_path, namespace, function_name, style='sphinx')
                         stream.write('Line: {:d}\n{:s}'.format(line, docstring))
                     except Exception as err:
-                        logging.error('{:s}: {:s}'.format(type(err), str(err)))
-                        logging.error(''.join(traceback.format_stack()))
+                        logging.error('Can not write function "{:s}": {!r:s}, {:s}'.format(function_name, type(err), str(err)))
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        logging.error(''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+                        # logging.error(''.join(traceback.format_stack()))
                     stream.write('\n')
         stream.write(' END: dump_docstrings '.center(75, '-'))
         stream.write('\n')
@@ -65,21 +69,23 @@ def compile_and_exec(root_path, stubs_dir, filename, *args, **kwargs):
         logging.debug('typein_cli.compile_and_exec() read {:d} lines'.format(src.count('\n')))
         code = compile(src, filename, 'exec')
         with type_inferencer.TypeInferencer() as ti:
-#             exec(code, globals())
+            #             exec(code, globals())
             try:
                 exec(code, globals())#, locals())
             except SystemExit:
                 # Trap CLI code that calls exit() or sys.exit()
                 pass
-#         print('ti.pretty_format()')
-#         print(ti.pretty_format())
+            #         print('ti.pretty_format()')
+            #         print(ti.pretty_format())
         print(' ti.pretty_format() '.center(75, '-'))
         file_paths = ti.file_paths_filtered(root_path, relative=True)
         for key, file_path in file_paths:
             print(os.path.join(stubs_dir, file_path))
             print(ti.pretty_format(key))
+        print(' END: ti.pretty_format() '.center(75, '-'))
         print(' ti.dump() '.center(75, '-'))
         ti.dump()
+        print(' END: ti.dump() '.center(75, '-'))
         if stubs_dir:
             write_all_stub_files(ti, stubs_dir)
         dump_docstrings(ti)

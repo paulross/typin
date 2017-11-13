@@ -25,7 +25,7 @@ class Type(object):
     # Matches "<class 'int'>" to extract "int"
     # re.ASCII is "<enum RegexFlag>"
     RE_TYPE_STR_MATCH = re.compile(r'<(?:class|enum) \'(.+)\'>')
-    
+
     def __init__(self, obj, __ids=None):
         """Constructor with an object. __ids is used internally to prevent
         infinite recursion when, for example, a list contains itself.
@@ -49,9 +49,12 @@ class Type(object):
                     t = Type(o, __ids)
                     if t not in self._type:
                         self._type.append(t)
-            elif isinstance(obj, (set, tuple)):
+            elif isinstance(obj, tuple):
+                # Tuple: make an tuple of all types, we specify tuple as this block also
+                # deals with namedtuples and using type(obj) will cause __new__ to fail.
+                self._type = tuple([self._get_type(o, __ids) for o in obj])
+            elif isinstance(obj, set):
                 # Set: insert unique types only by virtue of type(obj).
-                # Tuple: make an tuple of all types.
                 self._type = type(obj)([self._get_type(o, __ids) for o in obj])
             elif isinstance(obj, dict):
                 # Dict: make a dict {key_type : set(value_types), ...}
@@ -80,13 +83,13 @@ class Type(object):
         if hasattr(other, '_type'):
             return self._type == other._type
         return False
-    
+
     def __lt__(self, other):
         return str(self._type) < str(other._type)
-    
+
     def __hash__(self):
         return hash(str(self))
-    
+
     def __str__(self):
         if isinstance(self._type, (list, set, tuple)):
             sl = [Type.str_of_object_type(self._type), '([']
@@ -113,21 +116,21 @@ class Type(object):
             return s
         else:
             return '{!s:s}'.format(self.str_of_type(self._type))
-    
+
     @classmethod
     def str_of_type(cls, typ):
         m = Type.RE_TYPE_STR_MATCH.match(str(typ))
         if m is not None:
             return m.group(1)
         raise ValueError('Can not parse type: "{:s}"'.format(str(typ)))
-    
+
     @classmethod
     def str_of_object_type(cls, obj):
         m = Type.RE_TYPE_STR_MATCH.match(str(type(obj)))
         if m is not None:
             return m.group(1)
         raise ValueError('Can not parse object: "{:s}", type {:s}'.format(str(obj), str(type(obj))))
-    
+
 class FunctionTypes:
     """Class that accumulate function call data such as call arguments,
     return values and exceptions raised."""
@@ -155,13 +158,13 @@ class FunctionTypes:
         # dict of {line_number : set(types.Type), ...}
         self._exception_types = {}
         # There should be at least one of these, possibly others for generators
-        # where yield is a re-entry point 
+        # where yield is a re-entry point
         self.call_line_numbers = []
         # Largest seen line number
         self.max_line_number = 0
         # TODO: Track call/return type pairs so we can use the @overload
         # decorator in the .pyi files.
-        
+
     def __repr__(self):
         """Dump of the internal representation."""
         def _str_list_add_dict(title, d, l):
@@ -172,20 +175,20 @@ class FunctionTypes:
             else:
                 sub_l.append('N/A'.format(title))
             l.append(' '.join(sub_l))
-            
+
         str_l = []
         _str_list_add_dict('Argument types', self.argument_type_strings, str_l)
         _str_list_add_dict('Return types', self.return_type_strings, str_l)
         _str_list_add_dict('Exceptions', self.exception_type_strings, str_l)
         str_l.append('Entry points: {!r:s}'.format(self.call_line_numbers))
         return ', '.join(str_l)
-    
+
     def _stringify_dict_of_set(self, dofs):
         ret = type(dofs)()
         for k, v in dofs.items():
             ret[k] = set([str(t) for t in v])
         return ret
-        
+
     @property
     def argument_type_strings(self):
         """A ``collections.OrderedDict`` of
@@ -207,12 +210,17 @@ class FunctionTypes:
         return self._stringify_dict_of_set(self._exception_types)
 
     @property
+    def num_entry_points(self):
+        """The number of entry points, 1 for normal functions >1 for generators. 0 Something wrong."""
+        return len(self.call_line_numbers)
+
+    @property
     def line_decl(self):
         """Line number of the function declaration as an integer."""
         if len(self.call_line_numbers) == 0:
             raise FunctionTypesExceptionNoData()
         return self.call_line_numbers[0]
-        
+
     @property
     def line_range(self):
         """A pair of line numbers of the span of the function as integers.
@@ -221,7 +229,7 @@ class FunctionTypes:
         if len(self.call_line_numbers) == 0:
             raise FunctionTypesExceptionNoData()
         return self.call_line_numbers[0], self.max_line_number
-    
+
     def _check_line_number(self, line_number, file_path=''):
         assert len(self.call_line_numbers) > 0
         # Sanity check: Call sites, can increase when using yield statements
@@ -231,10 +239,10 @@ class FunctionTypes:
             raise ValueError('Call site in "{:s}" goes backwards, was {:d} now {:d}'.format(
                 file_path, self.call_line_numbers[0], line_number)
             )
-        
+
     def add_call(self, arg_info, file_path, line_number):
         """Adds a function call from the frame."""
-        # arg_info is an ArgInfo object which is a named tuple from 
+        # arg_info is an ArgInfo object which is a named tuple from
         # inspect.getargvalues(frame):
         # ArgInfo(args, varargs, keywords, locals):
         #     args - list of names as strings.
@@ -242,10 +250,11 @@ class FunctionTypes:
         #     keywords - name entry in the locals for *kwargs or None.
         #     locals - dict of {name : value, ...} of arguments.
         for arg in arg_info.args:
+            t = Type(arg_info.locals[arg])
             try:
-                self.arguments[arg].add(Type(arg_info.locals[arg]))
+                self.arguments[arg].add(t)
             except KeyError:
-                self.arguments[arg] = set([Type(arg_info.locals[arg])])
+                self.arguments[arg] = set([t])
         if len(self.call_line_numbers) == 0:
             # First call
             self.call_line_numbers.append(line_number)
@@ -257,7 +266,7 @@ class FunctionTypes:
             # but never can decrease
             self._check_line_number(line_number, file_path)
         self.max_line_number = max(self.max_line_number, line_number)
-    
+
     def add_return(self, return_value, line_number):
         """Records a return value at a particular line number.
         If the return_value is None and we have previously seen an exception at
@@ -274,7 +283,7 @@ class FunctionTypes:
             self.return_types[line_number] = set([t])
         self._check_line_number(line_number)
         self.max_line_number = max(self.max_line_number, line_number)
-        
+
     def add_exception(self, exception, line_number):
         """Add an exception."""
         t = Type(exception)
@@ -284,7 +293,7 @@ class FunctionTypes:
             self._exception_types[line_number] = set([t])
         self._check_line_number(line_number)
         self.max_line_number = max(self.max_line_number, line_number)
-    
+
     def __str__(self):
         """Returns something like the annotation string."""
         sl = ['type:']
@@ -298,7 +307,7 @@ class FunctionTypes:
                         arg,
                         ', '.join([str(v) for v in arguments])
                     )
-                )                
+                )
         # self.return_types is a dict of {line_number : set(types.Type), ...}
         return_types = set()
         for v in self.return_types.values():
@@ -312,15 +321,15 @@ class FunctionTypes:
                 ', '.join((self._type(str(t)) for t in return_types)))
             )
         return ' '.join(sl)
-    
+
     def _type(self, name):
         """Translates a type name if necessary."""
         return self.TYPE_NAME_TRANSLATION.get(name, name)
-        
+
     def stub_file_str(self):
         """A string suitable for writing to a stub file.
         Example::
-        
+
             def encodebytes(s: bytes) -> bytes: ...
         """
         sl = ['(']
@@ -341,7 +350,7 @@ class FunctionTypes:
                             ', '.join([self._type(str(v)) for v in argument_types])
                         )
                     )
-        sl.append(', '.join(arg_str_list)) 
+        sl.append(', '.join(arg_str_list))
         # self.return_types is a dict of {line_number : set(types.Type), ...}
         sl.append(') ->')
         return_types = set()
@@ -361,7 +370,7 @@ class FunctionTypes:
             )
         sl.append(': ...')
         return ''.join(sl)
-    
+
     def _insert_doc_marker(self, suffix):
         return '<insert documentation for {:s}>'.format(suffix)
 
@@ -394,19 +403,19 @@ class FunctionTypes:
                 excepts |= e
             str_l.append(':raises: {:s}'.format(', '.join(sorted(excepts))))
         return '\n'.join(str_l)
-    
+
 #     def _docstring_google(self):
 #         str_l = []
 #         return '\n'.join(str_l)
-    
+
     def docstring(self, style='sphinx'):
         """Returns a pair (line_number, docstring) for this function. The
         docstring is the __doc__ for the function and the line_number is the
         docstring position (function declaration + 1).
         So to insert into a list of lines called ``src``::
-        
+
             src[:line_number] + docstring + src[line_number:]
-            
+
         style can be 'sphinx' or 'google'."""
         despatch = {
             'sphinx' : self._docstring_sphinx,

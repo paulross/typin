@@ -275,7 +275,7 @@ class TypeInferencer(object):
         # Strip prefix
         return qualified_name[idx + len('<locals>') + 1:]
 
-    def _qualified_name(self, frame):
+    def _qualified_name(self, frame, bases_cache={}):
         """This takes a frame and discovers which function is being executed.
         It then returns the qualified name of the function as a string and the
         base classes (as a tuple of types) of the enclosing object (if any).
@@ -313,30 +313,44 @@ class TypeInferencer(object):
             # Global
             cls_name = ''
             cls_name_leaf = ''
-        if fn_obj is not None:
-            if fn_obj.__name__.startswith('__') and not fn_obj.__name__.endswith('__'):
-                # Name mangling: class A that has def __private the key is _A__private
-                function_name = '_{:s}{:s}'.format(cls_name_leaf, fn_obj.__name__)
-            else:
-                function_name = fn_obj.__name__
-#             print('function_name', function_name)
-            for class_obj in gc.get_objects():
-                # Something like:
-                # function_object.__name__ in class_obj.__dict__
-                # and class_obj.__dict__[function_name] == function_object
-#                 if inspect.isclass(class_obj):
-#                     print('class_obj.__dict__', class_obj.__name__, class_obj.__dict__.keys(), class_obj.__bases__)
-                if inspect.isclass(class_obj) \
-                and function_name in class_obj.__dict__ \
-                and class_obj.__dict__[function_name] == fn_obj:
-                    bases = class_obj.__bases__
-                    break
+        if fn_obj is None:
+            logging.warning('Can not find function in frame {:s}'.format(repr(inspect.getframeinfo(frame))))
         else:
-            logging.warning('Can not find function in frame')
-#         print('TRACE: _qualified_name():', q_name, bases)
+            # Try the cache
+            frame_info = inspect.getframeinfo(frame)
+            if frame_info.filename in bases_cache and cls_name in bases_cache[frame_info.filename]:
+                bases = bases_cache[frame_info.filename][cls_name]
+            else:
+                # Look up the bases
+                if fn_obj.__name__.startswith('__') and not fn_obj.__name__.endswith('__'):
+                    # Name mangling: class A that has def __private the key is _A__private
+                    function_name = '_{:s}{:s}'.format(cls_name_leaf, fn_obj.__name__)
+                else:
+                    function_name = fn_obj.__name__
+                # print('function_name', function_name)
+                for class_obj in gc.get_objects():
+                    # Something like:
+                    # function_object.__name__ in class_obj.__dict__
+                    # and class_obj.__dict__[function_name] == function_object
+                    # if inspect.isclass(class_obj):
+                    #     print('class_obj.__dict__', class_obj.__name__, class_obj.__dict__.keys(), class_obj.__bases__)
+                    if inspect.isclass(class_obj) \
+                    and function_name in class_obj.__dict__ \
+                    and class_obj.__dict__[function_name] == fn_obj:
+                        bases = class_obj.__bases__
+                        # Cache the bases
+                        if frame_info.filename not in bases_cache:
+                            bases_cache[frame_info.filename] = {}
+                        bases_cache[frame_info.filename][cls_name] = bases
+                        break
+        # print('TRACE: _qualified_name():', q_name, bases)
         if bases is None:
             if cls_name != '':
-                logging.warning('Can not find bases for class "{:s}" method "{:s}"'.format(cls_name, function_name))
+                logging.warning(
+                    'Can not find bases for class "{:s}" method "{:s}" frame: {!r:s}'.format(
+                        cls_name, function_name, inspect.getframeinfo(frame)
+                    )
+                )
             bases = tuple()
         return q_name, bases
 
@@ -358,16 +372,21 @@ class TypeInferencer(object):
                 )
             )
             pass
+        # Only look at 'real' files and functions
+        if self.RE_TEMPORARY_FILE.match(frame_info.filename) \
+        or frame_info.function in ('<genexpr>', '<module>', '<listcomp>'):
+            # Ignore these.
+            return self
         if event in ('call', 'return', 'exception'):# and frame_info.filename != '<module>':
             file_path = os.path.abspath(frame_info.filename)
             # TODO: For methods use __qualname__
-#             function_name = frame_info.function
+            #             function_name = frame_info.function
             lineno = frame_info.lineno
             q_name, bases = self._qualified_name(frame)
             logging.debug(
                 'TypeInferencer.__call__(): q_name="{:s}", bases={!r:s})'.format(
                     q_name, bases
-            ))
+                ))
             if q_name != '':
                 try:
                     self._set_bases(file_path, lineno, q_name, bases)
@@ -383,9 +402,20 @@ class TypeInferencer(object):
                         # arg is a tuple (exception_type, exception_value, traceback)
                         func_types.add_exception(arg[1], lineno)
                 except Exception as err:
-                    logging.error(str(err))
-                    if self.verbose > 1:
-                        logging.error(''.join(traceback.format_stack()))
+                    logging.error(
+                        'Could not add event "{:s}" Function: {:s} File: {:s}#{:d}'.format(
+                            event,
+                            frame_info.function,
+                            frame_info.filename,
+                            frame_info.lineno,
+                        )
+                    )
+                    logging.error('Type error: {!r:s}, message: {:s}'.format(type(err), str(err)))
+                    logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+                    # if self.verbose > 1:
+                    #     logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+            else:
+                logging.error('Could not find qualified name in frame: {!r:s}'.format(frame_info))
         return self
 
     def _cleanup(self):
