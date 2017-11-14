@@ -710,20 +710,21 @@ def test_class_multiple_inheritance_unsorted():
     class Y: pass
     class Z: pass
     class A(Z, X, Y):
-        def __init__(self, month): pass
+#         def __init__(self, month):
+#             super().__init__()
         def __str__(self):
             return ''
         
     with type_inferencer.TypeInferencer() as ti:
-        obj = A(4)
+        obj = A()
         str(obj)
     expected = [
         'class A(Z, X, Y):',
         '    def __init__(self, month: int) -> None: ...',
         '    def __str__(self) -> str: ...',
     ]
-#     print()
-#     print(ti.pretty_format(__file__))
+    print()
+    print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
 # Used for line number and ranges
@@ -1031,9 +1032,9 @@ def test_class_properties_get_set():
         '    def __init__(self, value: int) -> None: ...',
         '    def value(self, value: int) -> Union[None, int]: ...',
     ]
-    print()
-    pprint.pprint(ti.function_map)
-    print(ti.pretty_format(__file__))
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
 def test_class_properties_get_set_calls_reversed():
@@ -1059,9 +1060,9 @@ def test_class_properties_get_set_calls_reversed():
         '    def __init__(self, value: int) -> None: ...',
         '    def value(self, value: int) -> Union[None, int]: ...',
     ]
-    print()
-    pprint.pprint(ti.function_map)
-    print(ti.pretty_format(__file__))
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
 def test_named_tuple():

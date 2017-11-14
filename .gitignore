@@ -115,6 +115,7 @@ ENV/
 # PyCharm
 .idea/
 
-# Temporary stuff
+# Temporary and experimental stuff
 tmp/
+src/typin/stubs/
 
