@@ -15,6 +15,15 @@ import traceback
 # from typin import str_id_cache
 from typin import types
 
+class TypeInferencerExceptionBase(Exception):
+    """Base class for exceptions thrown by this module."""
+    pass
+
+class TypeInferencerExceptionConflictingLines(TypeInferencerExceptionBase):
+    """Exception thrown when multiple functions appear on same line."""
+    pass
+
+
 # TODO: How to create the taxonomy? collections.abc [Python3]?
 
 class TypeInferencer(object):
@@ -189,6 +198,7 @@ class TypeInferencer(object):
                 )
                 if add_line_number_as_comment:
                     str_list[-1] = str_list[-1] + '#{:d}'.format(fts.line_range[0])
+            str_list.append('')
         return str_list
 
     def pretty_format(self, file=None, add_line_number_as_comment=False):
@@ -208,8 +218,21 @@ class TypeInferencer(object):
         return 'def {:s}{:s}'.format(function_name, fts.stub_file_str())
 
     def docstring(self, file_path, namespace, function_name, style='sphinx'):
+        """Returns a pair (line_number, docstring) for the function."""
         fts = self.function_types(file_path, namespace, function_name)
         return fts.docstring(style)
+
+    def docstring_map(self, file_path, style='sphinx'):
+        """Returns a dict of {line_number : (namespace, function_name, docstring), ...} for the file."""
+        line_docs = {}
+        for namespace in self.function_map[file_path]:
+            for function_name in self.function_map[file_path][namespace]:
+                fts = self.function_map[file_path][namespace][function_name]
+                lineno, docstring = fts.docstring(style)
+                if lineno in line_docs:
+                    raise TypeInferencerExceptionConflictingLines('Line {:d} appears twice'.format(lineno))
+                line_docs[lineno] = (namespace, function_name, docstring)
+        return line_docs
 
     def _get_func_data(self, file_path, qualified_name):
         """Return a FunctionTypes() object for the function, created if necessary."""

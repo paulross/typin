@@ -5,6 +5,7 @@ import datetime
 import logging
 import os
 import sys
+import time
 import traceback
 
 from typin import type_inferencer
@@ -31,31 +32,34 @@ def write_all_stub_files(ti, stubs_dir):
                     stream.write(ti.pretty_format(file_path, add_line_number_as_comment=True))
                 except Exception as err:
                     logging.error('Could not write docstring to {:s}: {!r:s}: {:s}'.format(out_path, type(err), str(err)))
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    logging.error(''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
-                    # logging.error(''.join(traceback.format_stack()))
+                    logging.error(''.join(traceback.format_exception(*sys.exc_info())))
                 stream.write('\n')
 
-def dump_docstrings(ti, stream=sys.stdout):
+def dump_docstrings(ti, stream=sys.stdout, reverse_lines=False):
         stream.write(' dump_docstrings '.center(75, '-'))
         stream.write('\n')
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         for file_path in sorted(ti.file_paths()):
             stream.write('File: {:s}\n'.format(file_path))
-            for namespace in sorted(ti.namespaces(file_path)):
-                stream.write('  Namespace: "{:s}"\n'.format(namespace))
-                for function_name in sorted(ti.function_names(file_path, namespace)):
-                    stream.write(
-                        '    Function: "{:s}":\n'.format(function_name)
-                    )
-                    try:
-                        line, docstring = ti.docstring(file_path, namespace, function_name, style='sphinx')
-                        stream.write('Line: {:d}\n{:s}'.format(line, docstring))
-                    except Exception as err:
-                        logging.error('Can not write function "{:s}": {!r:s}, {:s}'.format(function_name, type(err), str(err)))
-                        exc_type, exc_value, exc_traceback = sys.exc_info()
-                        logging.error(''.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
-                        # logging.error(''.join(traceback.format_stack()))
+            try:
+                docstring_map = ti.docstring_map(file_path, style='sphinx')
+            except Exception as err:
+                logging.error('Can not write docstring for file "{:s}": {!r:s}, {:s}'.format(file_path, type(err), str(err)))
+                logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+            else:
+                if reverse_lines:
+                    keys = reversed(sorted(docstring_map.keys()))
+                else:
+                    keys = sorted(docstring_map.keys())
+                for lineno in keys:
+                    namespace, function_name, docstring = docstring_map[lineno]
+                    prefix = '    '
+                    if namespace != '':
+                        prefix *= 1 + len(namespace.split('.'))
+                    stream.write('Namespace: "{:s}"\n'.format(namespace))
+                    stream.write('Function: "{:s}" [{:d}]:\n'.format(function_name, lineno))
+                    for aline in docstring.split('\n'):
+                        stream.write('{:s}{:s}\n'.format(prefix, aline))
                     stream.write('\n')
         stream.write(' END: dump_docstrings '.center(75, '-'))
         stream.write('\n')
@@ -131,6 +135,8 @@ def main():
     This will execute ``example.py`` with the options ``foo bar baz`` under the
     control of typin and write all the type annotations to the stubs/ directory.
     """
+    start_time = time.time()
+    start_clock = time.clock()
     program_version = "v%s" % '0.1.0'
     program_shortdesc = 'typin_cli - Infer types of Python functions.'
     program_license = """%s
@@ -212,6 +218,9 @@ USAGE
 #     test()
     target_args = cli_args.argstring.split(' ')
     compile_and_exec(root_path, cli_args.stubs, cli_args.program, *target_args)
+    print(' CPU time = {:8.3f} (S)'.format(time.time() - start_time))
+    print('CPU clock = {:8.3f} (S)'.format(time.clock() - start_clock))
+    print('Bye, bye!')
     return 0
 
 if __name__ == '__main__':

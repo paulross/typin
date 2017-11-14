@@ -147,6 +147,7 @@ class FunctionTypes:
         '_io.StringIO' : 'IO[bytes]',
         'NoneType' : 'None',
     }
+    SELF = 'self'
     def __init__(self):
         """Constructor, takes no arguments, merely initialises internal state."""
         super().__init__()
@@ -346,8 +347,8 @@ class FunctionTypes:
         sl = ['(']
         arg_str_list = []
         for arg_name in self.arguments:
-            if arg_name.startswith('self'):
-                arg_str_list.append('self')
+            if arg_name.startswith(self.SELF):
+                arg_str_list.append(self.SELF)
             else:
                 argument_types = sorted(self.arguments[arg_name])
                 if len(argument_types) == 1:
@@ -388,31 +389,41 @@ class FunctionTypes:
     def _docstring_sphinx(self):
         str_l = []
         str_l.append(self._insert_doc_marker('function'))
+        str_l.append('')
         arg_types = self.argument_type_strings
         # Arguments, optional
-        for arg, types in arg_types.items():
+        for i, (arg, types) in enumerate(arg_types.items()):
+            if i == 0 and arg == self.SELF:
+                # Skip the self argument
+                continue
             str_l.append(':param {:s}: {:s}'.format(
                 arg,
                 self._insert_doc_marker('argument'))
             )
-            str_l.append(':type {:s}: {:s}'.format(arg, ', '.join(sorted(types))))
+            str_l.append(':type {:s}: ``{:s}``'.format(arg, ', '.join(sorted(types))))
+            str_l.append('')
         # Returns
         return_types = set()
         for set_returns in self.return_type_strings.values():
             return_types |= set_returns
         # :returns:  int -- the return code.
-        str_l.append(
-            ':returns: {:s} -- {:s}'.format(
-                ','.join(sorted(return_types)),
-                self._insert_doc_marker('return values'),
+        str_return_types = ','.join(sorted(return_types))
+        if str_return_types == 'NoneType':
+            str_l.append(':returns: ``{:s}``'.format(str_return_types))
+        else:
+            str_l.append(
+                ':returns: ``{:s}`` -- {:s}'.format(
+                    str_return_types,
+                    self._insert_doc_marker('return values'),
+                )
             )
-        )
         # Exceptions, optional
         if len(self._exception_types) > 0:
+            str_l.append('')
             excepts = set()
             for e in self.exception_type_strings.values():
                 excepts |= e
-            str_l.append(':raises: {:s}'.format(', '.join(sorted(excepts))))
+            str_l.append(':raises: ``{:s}``'.format(', '.join(sorted(excepts))))
         return '\n'.join(str_l)
 
 #     def _docstring_google(self):
