@@ -436,8 +436,8 @@ class FunctionTypes:
         docstring position (function declaration + 1).
         So to insert into a list of lines called ``src``::
 
-            src[:line_number] + docstring.split('\n') + src[line_number:]
-
+            src[:line_number] + docstring.split('\\n') + src[line_number:]
+        
         style can be 'sphinx' or"""
         despatch = {
             'sphinx' : self._docstring_sphinx,

@@ -55,19 +55,33 @@ Exception specification are not part of Python's type annotation but they are
 part of of the Sphinx documentation string standard and ``typin`` can provide that, and
 the line number where it should be inserted::
 
-    line, docstring = ti.docstring(__file__, '', 'function', style='sphinx')
-    docstring
+    line_number, docstring = ti.docstring(__file__, '', 'function', style='sphinx')
+    '"""{:s}"""'.format(docstring)
     """<insert documentation for function>
+    
     :param s: <insert documentation for argument>
     :type s: str
+    
     :param num: <insert documentation for argument>
     :type num: int
+    
     :returns: str -- <insert documentation for return values>
+    
     :raises: ValueError"""
-    # 'line' is the line before which the documentation string should be inserted.
-    # If 'src' is the source code as a list of strings then inserting the
-    # documentation string is done by:
-    # src[:line_number] + docstring + src[line_number:]
+    # 'line_number' is the line of the function definition where the documentation string
+    # should be inserted. These can be inserted thus:
+    with open(__file__) as f:
+        src = f.readlines()
+    new_src = src[:line_number] + docstring.split('\n') + src[line_number:]
+    with open(__file__, 'w') as f:
+        for line in new_src:
+            f.write(line)
+    # Obviously you want to insert the docstrings in reverse line order with multiple functions.
+    # ti.docstring_map(file_path) will return a dict of:
+    # {line_number : (namespace, function_name, docstring), ...}
+    # for the file.
+
+Sadly ``typin`` is not smart enough to write the documentation text for you :-)
 
 There is a CLI interface ``typin/src/typin/typin_cli.py`` to execute arbitrary
 python code using ``compile()`` and ``exec()`` like this::
