@@ -111,7 +111,6 @@ Python type inferencing.
 * Free software: MIT license
 * Documentation: https://typin.readthedocs.io.
 
-
 Features
 --------
 
