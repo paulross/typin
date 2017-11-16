@@ -107,6 +107,27 @@ def test_single_function_that_raises():
     fts = ti.function_types(__file__, '', 'func_that_raises')
     assert fts.exception_type_strings == {line_raises : {'ValueError'}}
     
+def test_single_function_that_raises_and_catches():
+    line_raises = inspect.currentframe().f_lineno + 3
+    def func_that_raises_and_catches():
+        try:
+            raise ValueError('Error message')
+        except ValueError as _err:
+            pass
+        return 'OK'
+    
+    with type_inferencer.TypeInferencer() as ti:
+        func_that_raises_and_catches()
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    expected = [
+        'def func_that_raises_and_catches() -> str: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'func_that_raises_and_catches')
+    # No exception recorded.
+    assert fts.exception_type_strings == {}
 
 def test_nested_function_that_raises():
     func_no_catch_line = inspect.currentframe().f_lineno + 2
@@ -123,9 +144,70 @@ def test_nested_function_that_raises():
         except ValueError:
             pass
 #     print()
-#     print('test_single_function_that_raises()')
-#     _pretty_print(ti)
 #     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    expected = [
+        'def func_no_catch() -> None: ...',
+        'def func_that_raises() -> None: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'func_that_raises')
+    assert fts.exception_type_strings == {func_that_raises_line : {'ValueError'}}
+    fts = ti.function_types(__file__, '', 'func_no_catch')
+    assert fts.exception_type_strings == {func_no_catch_line : {'ValueError'}}
+    
+def test_nested_functions_some_that_raises():
+#     line_func_that_catches = inspect.currentframe().f_lineno + 1
+    def func_that_catches():
+        try:
+            func_no_catch()
+        except ValueError:
+            pass
+
+    line_func_no_catch = inspect.currentframe().f_lineno + 2
+    def func_no_catch():
+        func_that_raises()
+    
+    line_func_that_raises = inspect.currentframe().f_lineno + 2
+    def func_that_raises():
+        raise ValueError('Error message')
+    
+    with type_inferencer.TypeInferencer() as ti:
+        func_that_catches()
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    expected = [
+        'def func_no_catch() -> None: ...',
+        'def func_that_catches() -> None: ...',
+        'def func_that_raises() -> None: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'func_that_catches')
+    assert fts.exception_type_strings == {}
+    fts = ti.function_types(__file__, '', 'func_no_catch')
+    assert fts.exception_type_strings == {line_func_no_catch : {'ValueError'}}
+    fts = ti.function_types(__file__, '', 'func_that_raises')
+    assert fts.exception_type_strings == {line_func_that_raises : {'ValueError'}}
+    
+def test_function_within_function_that_raises():
+    func_no_catch_line = inspect.currentframe().f_lineno + 2
+    func_that_raises_line = inspect.currentframe().f_lineno + 2
+    def func_no_catch():
+        def func_that_raises():
+            raise ValueError('Error message')
+        func_that_raises()
+    
+    with type_inferencer.TypeInferencer() as ti:
+        try:
+            func_no_catch()
+        except ValueError:
+            pass
+    print()
+    print(' test_function_within_function_that_raises() '.center(75, '-'))
+    pprint.pprint(ti.function_map)
+    print(ti.pretty_format(__file__))
+    
     expected = [
         'def func_no_catch() -> None: ...',
         'def func_that_raises() -> None: ...',

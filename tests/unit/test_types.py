@@ -288,11 +288,13 @@ def test_FunctionTypes_docstring_sphinx_simple():
 #     print()
 #     print(fts.docstring('sphinx'))
     expected = (
-        101,
+        100,
         """<insert documentation for function>
+
 :param i: <insert documentation for argument>
-:type i: int
-:returns: int -- <insert documentation for return values>"""
+:type i: ``int``
+
+:returns: ``int`` -- <insert documentation for return values>"""
     )
     assert fts.docstring('sphinx') == expected
 

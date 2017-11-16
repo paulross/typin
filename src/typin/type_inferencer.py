@@ -52,6 +52,9 @@ class TypeInferencer(object):
         self._trace_fn_stack = []
         # Verbose oputput
         self.verbose = verbose
+        # Deferred evaluation of exceptions to exclude spurious
+        # return None events
+        self.exception_in_flight = None
 
     def dump(self, stream=sys.stdout):
         """Dump the internal representation to a stream."""
@@ -198,7 +201,6 @@ class TypeInferencer(object):
                 )
                 if add_line_number_as_comment:
                     str_list[-1] = str_list[-1] + '#{:d}'.format(fts.line_range[0])
-            str_list.append('')
         return str_list
 
     def pretty_format(self, file=None, add_line_number_as_comment=False):
@@ -207,6 +209,8 @@ class TypeInferencer(object):
         # {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         if file is None:
             for file_path in sorted(self.function_map.keys()):
+                if len(str_list):
+                    str_list.append('')
                 str_list.append('File: {:s}'.format(file_path))
                 str_list.extend(self._pformat_file(file_path, add_line_number_as_comment))
         else:
@@ -401,11 +405,11 @@ class TypeInferencer(object):
         or frame_info.function in self.FALSE_FUNCTION_NAMES:
             # Ignore these.
             return self
+        lineno = frame_info.lineno
         if event in ('call', 'return', 'exception'):# and frame_info.filename != '<module>':
             file_path = os.path.abspath(frame_info.filename)
             # TODO: For methods use __qualname__
             #             function_name = frame_info.function
-            lineno = frame_info.lineno
             q_name, bases = self._qualified_name(frame)
             logging.debug(
                 'TypeInferencer.__call__(): q_name="{:s}", bases={!r:s})'.format(
@@ -419,12 +423,21 @@ class TypeInferencer(object):
                         # arg is None
                         func_types.add_call(inspect.getargvalues(frame), file_path, lineno)
                     elif event == 'return':
-                        # arg is return value
-                        func_types.add_return(arg, lineno)
+                        if self.exception_in_flight is not None:
+                            assert arg is None
+                            assert lineno == self.exception_in_flight[1]
+                            # Ignore spurious return after exception
+                            func_types.add_exception(*self.exception_in_flight)
+                            self.exception_in_flight = None
+                        else:
+                            # arg is return value
+                            func_types.add_return(arg, lineno)
                     else:
                         assert event == 'exception'
                         # arg is a tuple (exception_type, exception_value, traceback)
-                        func_types.add_exception(arg[1], lineno)
+#                         func_types.add_exception(arg[1], lineno)
+                        assert self.exception_in_flight is None
+                        self.exception_in_flight = (arg[1], lineno)
                 except Exception as err:
                     logging.error(
                         'Could not add event "{:s}" Function: {:s} File: {:s}#{:d}'.format(
@@ -440,6 +453,12 @@ class TypeInferencer(object):
                     #     logging.error(''.join(traceback.format_exception(*sys.exc_info())))
             else:
                 logging.error('Could not find qualified name in frame: {!r:s}'.format(frame_info))
+        elif event == 'line' and self.exception_in_flight is not None:
+            # Deferred decision about the exception reveals that
+            # this exception is caught within the function.
+            assert arg is None
+            assert lineno > self.exception_in_flight[1]
+            self.exception_in_flight = None
         return self
 
     def _cleanup(self):

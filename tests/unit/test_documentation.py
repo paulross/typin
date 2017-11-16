@@ -59,15 +59,19 @@ def test_function_annotation():
 #     print()
 #     print(docstring)
     expected_docstring = """<insert documentation for function>
+
 :param s: <insert documentation for argument>
-:type s: str
+:type s: ``str``
+
 :param num: <insert documentation for argument>
-:type num: int
-:returns: str -- <insert documentation for return values>
-:raises: ValueError"""
+:type num: ``int``
+
+:returns: ``str`` -- <insert documentation for return values>
+
+:raises: ``ValueError``"""
     assert docstring == expected_docstring
     
-def test_function_raises():
+def test_function_raises_no_see_return():
     with type_inferencer.TypeInferencer() as ti:
         try:
             function_checks_type('Hi', 'str')
@@ -85,11 +89,47 @@ def test_function_raises():
 #     print()
 #     print(docstring)
     expected_docstring = """<insert documentation for function>
+
 :param s: <insert documentation for argument>
-:type s: int, str
+:type s: ``int, str``
+
 :param num: <insert documentation for argument>
-:type num: int, str
-:returns:  -- <insert documentation for return values>
-:raises: TypeError, ValueError"""
+:type num: ``int, str``
+
+:returns: ```` -- <insert documentation for return values>
+
+:raises: ``TypeError, ValueError``"""
+    assert docstring == expected_docstring
+    
+def test_function_raises_does_see_return():
+    with type_inferencer.TypeInferencer() as ti:
+        try:
+            function_checks_type('Hi', 'str')
+        except TypeError:
+            pass
+        try:
+            function_checks_type(2, 'str')
+        except TypeError:
+            pass
+        try:
+            function_checks_type('Hi', 0)
+        except ValueError:
+            pass
+        # This line does return.
+        function_checks_type('Hi', 2)
+    _line, docstring = ti.docstring(__file__, '', 'function_checks_type', style='sphinx')
+#     print()
+#     print(docstring)
+    expected_docstring = """<insert documentation for function>
+
+:param s: <insert documentation for argument>
+:type s: ``int, str``
+
+:param num: <insert documentation for argument>
+:type num: ``int, str``
+
+:returns: ``str`` -- <insert documentation for return values>
+
+:raises: ``TypeError, ValueError``"""
     assert docstring == expected_docstring
     
