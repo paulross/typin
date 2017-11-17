@@ -427,6 +427,7 @@ class TypeInferencer(object):
                             assert arg is None
                             assert lineno == self.exception_in_flight[1]
                             # Ignore spurious return after exception
+                            print('TRACE: adding exception:', *self.exception_in_flight)
                             func_types.add_exception(*self.exception_in_flight)
                             self.exception_in_flight = None
                         else:
@@ -435,9 +436,20 @@ class TypeInferencer(object):
                     else:
                         assert event == 'exception'
                         # arg is a tuple (exception_type, exception_value, traceback)
-#                         func_types.add_exception(arg[1], lineno)
-                        assert self.exception_in_flight is None
-                        self.exception_in_flight = (arg[1], lineno)
+                        # For a stop iteratino these values are: (<class 'StopIteration'>, StopIteration(), None)
+                        exception_type, exception_value, exception_traceback = arg
+
+                        print('TRACE:', frame_info.filename, frame_info.function, lineno, exception_type, repr(exception_value), repr(exception_traceback))
+                        # Ignore exceptions caused by co-routines as that is just for flow of control.
+                        if exception_type not in (StopIteration, GeneratorExit):
+                            # func_types.add_exception(arg[1], lineno)
+                            assert self.exception_in_flight is None, \
+                                'File: {:s}, function: {:s}, exception {:s} type {!r:s} in flight from line {:d}, now see exception event {:s} at {:d}'.format(
+                                    frame_info.filename, frame_info.function, repr(self.exception_in_flight[0]),
+                                    type(self.exception_in_flight[0]), self.exception_in_flight[1],
+                                    repr(exception_value), lineno
+                                )
+                            self.exception_in_flight = (exception_value, lineno)
                 except Exception as err:
                     logging.error(
                         'Could not add event "{:s}" Function: {:s} File: {:s}#{:d}'.format(
@@ -456,8 +468,17 @@ class TypeInferencer(object):
         elif event == 'line' and self.exception_in_flight is not None:
             # Deferred decision about the exception reveals that
             # this exception is caught within the function.
+            print('TRACE: Exception in flight followed by line event', frame_info.filename, frame_info.function, lineno)
             assert arg is None
-            assert lineno > self.exception_in_flight[1]
+            assert lineno > self.exception_in_flight[1], \
+                'File: {:s}, function: {:s}, exception {:s} type {!r:s} in flight from line {:d}, now see line event at {:d}'.format(
+                    frame_info.filename, frame_info.function, repr(self.exception_in_flight[0]),
+                    type(self.exception_in_flight[0]), self.exception_in_flight[1], lineno
+                )
+
+                # 'File: {:s}, function: {:s}, exception in flight from line {:d}, now see line event at {:d}'.format(
+                #     frame_info.filename, frame_info.function, self.exception_in_flight[1], lineno
+                # )
             self.exception_in_flight = None
         return self
 
