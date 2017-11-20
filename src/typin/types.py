@@ -148,9 +148,11 @@ class FunctionTypes:
         'NoneType' : 'None',
     }
     SELF = 'self'
-    def __init__(self):
+    def __init__(self, signature=None):
         """Constructor, takes no arguments, merely initialises internal state."""
         super().__init__()
+        # An inspect.Signature object.
+        self.signature = signature
         # TODO: Track a range of line numbers.
         # 'call' must be always the same line number
         # Since functions can not overlap the 'return' shows function bounds
@@ -196,6 +198,7 @@ class FunctionTypes:
         _str_list_add_dict('Return types', self.return_type_strings, str_l)
         _str_list_add_dict('Exceptions', self.exception_type_strings, str_l)
         str_l.append('Entry points: {!r:s}'.format(self.call_line_numbers))
+        str_l.append('Signature: {!s:s}'.format(self.signature))
         return ', '.join(str_l)
 
     def _stringify_dict_of_set(self, dofs):
@@ -396,7 +399,7 @@ class FunctionTypes:
             if i == 0 and arg == self.SELF:
                 # Skip the self argument
                 continue
-            str_l.append('')            
+            str_l.append('')
             str_l.append(':param {:s}: {:s}'.format(
                 arg,
                 self._insert_doc_marker('argument'))
@@ -439,7 +442,7 @@ class FunctionTypes:
         So to insert into a list of lines called ``src``::
 
             src[:line_number] + docstring.split('\\n') + src[line_number:]
-        
+
         style can be 'sphinx' or"""
         despatch = {
             'sphinx' : self._docstring_sphinx,

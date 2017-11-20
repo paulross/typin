@@ -31,7 +31,7 @@ class TypeInferencerExceptionConflictingLines(TypeInferencerExceptionBase):
 #: is the next immediate event.
 ExceptionInProgress = collections.namedtuple(
     'ExceptionInProgress', 'filename function lineno exception_value eventno'
-) 
+)
 
 # TODO: How to create the taxonomy? collections.abc [Python3]?
 
@@ -54,7 +54,7 @@ class TypeInferencer(object):
         """Constructor, takes no arguments, merely initialises internal state."""
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         self.function_map = {}
-        # TODO: Record if the function is a generator/co-routine by observing StopIteration? 
+        # TODO: Record if the function is a generator/co-routine by observing StopIteration?
         # Bases classes of a class from __bases__
         # dict of {file_path : { namespace : (__bases__, ...), ...}
         self.class_bases = {}
@@ -69,7 +69,7 @@ class TypeInferencer(object):
         # Event number for checking exceptions
         self.eventno = 0
         # TODO: Have event counters for different events
-        
+
         # Used for trace/debug
         self._trace_flag = False
 
@@ -257,7 +257,7 @@ class TypeInferencer(object):
                 line_docs[lineno] = (namespace, function_name, docstring)
         return line_docs
 
-    def _get_func_data(self, file_path, qualified_name):
+    def _get_func_data(self, file_path, qualified_name, signature):
         """Return a FunctionTypes() object for the function, created if necessary."""
         if file_path not in self.function_map:
             self.function_map[file_path] = {}
@@ -273,7 +273,7 @@ class TypeInferencer(object):
         if namespace not in self.function_map[file_path]:
             self.function_map[file_path][namespace] = {}
         if function_name not in self.function_map[file_path][namespace]:
-            self.function_map[file_path][namespace][function_name] = types.FunctionTypes()
+            self.function_map[file_path][namespace][function_name] = types.FunctionTypes(signature)
         r = self.function_map[file_path][namespace][function_name]
         return r
 
@@ -322,7 +322,7 @@ class TypeInferencer(object):
         # Strip prefix
         return qualified_name[idx + len('<locals>') + 1:]
 
-    def _qualified_name(self, frame, bases_cache={}):
+    def _qualified_name_bases_signature(self, frame, bases_cache={}):
         """This takes a frame and discovers which function is being executed.
         It then returns the qualified name of the function as a string and the
         base classes (as a tuple of types) of the enclosing object (if any).
@@ -342,6 +342,7 @@ class TypeInferencer(object):
         q_name = ''
         bases = None
         fn_obj = None
+        signature = None
         function_name = ''
         for _fn_obj in gc.get_objects():
             # See:
@@ -391,7 +392,8 @@ class TypeInferencer(object):
                             bases_cache[frame_info.filename] = {}
                         bases_cache[frame_info.filename][cls_name] = bases
                         break
-        # print('TRACE: _qualified_name():', q_name, bases)
+            signature = inspect.signature(fn_obj)
+        # print('TRACE: _qualified_name_bases_signature():', q_name, bases, signature)
         if bases is None:
             if cls_name != '':
                 logging.warning(
@@ -400,12 +402,12 @@ class TypeInferencer(object):
                     )
                 )
             bases = tuple()
-        return q_name, bases
-    
+        return q_name, bases, signature
+
     def _trace(self, *args):
         if self._trace_flag:
             print(*args)
-            
+
     def _debug(self, *args):
         if self._trace_flag:
             print(*args)
@@ -420,7 +422,7 @@ class TypeInferencer(object):
         if self._trace_flag:
             print(*args)
         logging.error(*args)
-        
+
     def _assert_exception_propagates(self, event, arg, frame_info):
         """Does some asserts when an exception is propagates from a function."""
         assert event == 'return', 'Event is "{!r:s}"'.format(event)
@@ -437,13 +439,13 @@ class TypeInferencer(object):
             )
         assert frame_info.lineno == self.exception_in_progress.lineno, \
             '"return": Line number was {:d} now {:d}'.format(
-                self.exception_in_progress.lineno, frame_info.lineno 
+                self.exception_in_progress.lineno, frame_info.lineno
             )
         assert self.exception_in_progress.eventno == self.eventno - 1, \
             '"return": Event number was {:d}, expected {:d}'.format(
                 self.exception_in_progress.eventno, self.eventno - 1
-            ) 
-        
+            )
+
     def _assert_exception_caught(self, event, arg, frame_info):
         """Does some asserts when an exception is caught within a function."""
         assert event == 'line', 'Event is "{!r:s}"'.format(event)
@@ -462,12 +464,12 @@ class TypeInferencer(object):
         # number must be > than where originally raised.
         assert frame_info.lineno > self.exception_in_progress.lineno, \
             '"line": Line number was {:d} now {:d}'.format(
-                self.exception_in_progress.lineno, frame_info.lineno 
+                self.exception_in_progress.lineno, frame_info.lineno
             )
         assert self.exception_in_progress.eventno == self.eventno - 1, \
             '"line": Event number was {:d}, expected {:d}'.format(
                 self.exception_in_progress.eventno, self.eventno - 1
-            ) 
+            )
 
     def _process_call_return_exception(self, frame, event, arg, frame_info, func_types):
         assert event in ('call', 'return', 'exception')
@@ -554,7 +556,7 @@ class TypeInferencer(object):
                 file_path = os.path.abspath(frame_info.filename)
                 # TODO: For methods use __qualname__
                 #             function_name = frame_info.function
-                q_name, bases = self._qualified_name(frame)
+                q_name, bases, signature = self._qualified_name_bases_signature(frame)
                 self._debug(
                     'TypeInferencer.__call__(): q_name="{:s}", bases={!r:s})'.format(
                         q_name, bases
@@ -562,10 +564,10 @@ class TypeInferencer(object):
                 if q_name != '':
                     try:
                         self._set_bases(file_path, lineno, q_name, bases)
-                        func_types = self._get_func_data(file_path, q_name)
+                        func_types = self._get_func_data(file_path, q_name, signature)
                         self._process_call_return_exception(frame, event, arg,
                                                             frame_info, func_types)
-                        
+
                     except Exception as err:
                         self._error(
                             'ERROR: Could not add event "{:s}" Function: {:s} File: {:s}#{:d}'.format(
