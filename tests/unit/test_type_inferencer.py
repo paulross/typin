@@ -1227,3 +1227,86 @@ def test_set_comprehension_ignored():
     pprint.pprint(ti.function_map)
     assert __file__ not in ti.function_map
 
+def test_generator():
+    # Generator events should not be recorded as exceptions
+    line_raises = inspect.currentframe().f_lineno + 2
+    def gen():
+        for i in range(3):
+            yield i
+    
+    with type_inferencer.TypeInferencer() as ti:
+        result = []
+        for i in gen():
+            result.append(i)
+        assert result == [0, 1, 2]
+    print()
+    pprint.pprint(ti.function_map)
+    expected = [
+        'def gen() -> Union[None, int]: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'gen')
+    assert fts.exception_type_strings == {}
+    
+def test_generator_in_generator():
+    # Generator events should not be recorded as exceptions
+    line_raises = inspect.currentframe().f_lineno + 2
+    def gen_outer():
+        for i in gen_inner(3):
+            yield i
+    
+    def gen_inner(num):
+        for i in range(num):
+            yield i
+    
+    with type_inferencer.TypeInferencer() as ti:
+        result = []
+        for i in gen_outer():
+            result.append(i)
+        assert result == [0, 1, 2]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    expected = [
+        'def gen_inner(num: int) -> Union[None, int]: ...',
+        'def gen_outer() -> Union[None, int]: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'gen_inner')
+    assert fts.exception_type_strings == {}
+    fts = ti.function_types(__file__, '', 'gen_outer')
+    assert fts.exception_type_strings == {}
+    
+def test_generator_in_generator_that_raises():
+    # Generator events should not be recorded as exceptions
+    def gen_outer():
+        try:
+            for i in gen_inner(3):
+                yield i
+        except RuntimeError:
+            pass
+    
+    line_raises = inspect.currentframe().f_lineno + 4
+    def gen_inner(num):
+        for i in range(num):
+            if i % 2 == 1:
+                raise RuntimeError()
+            yield i
+    
+    with type_inferencer.TypeInferencer() as ti:
+        result = []
+        for i in gen_outer():
+            result.append(i)
+        assert result == [0,]
+#     print()
+#     pprint.pprint(ti.function_map)
+#     print(ti.pretty_format(__file__))
+    expected = [
+        'def gen_inner(num: int) -> int: ...',
+        'def gen_outer() -> Union[None, int]: ...',
+    ]
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    fts = ti.function_types(__file__, '', 'gen_inner')
+    assert fts.exception_type_strings == {line_raises: {'RuntimeError'}}
+    fts = ti.function_types(__file__, '', 'gen_outer')
+    assert fts.exception_type_strings == {}
