@@ -10,20 +10,35 @@ import traceback
 
 from typin import type_inferencer
 
+def _new_file_path(root, file_path, makedirs=False, new_ext=''):
+    """Returns a new path of file_path below root.
+    If makedirs then the directory(ies) for the return value will be created.
+    """
+    path_list = os.path.abspath(os.path.normpath(file_path)).split(os.sep)
+    path_list.pop(0) # Root
+    if new_ext:
+        path_list[-1] = os.path.splitext(path_list[-1])[0] + new_ext
+    out_path = os.path.join(root, *path_list)
+    out_dir = os.path.dirname(out_path)
+    if makedirs and not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    return out_path
+
 def write_all_stub_files(ti, stubs_dir):
     assert stubs_dir != ''
     stubs_dir = os.path.abspath(stubs_dir)
     print(' write_all_stub_files() '.center(75, '-'))
     for file_path in sorted(ti.file_paths()):
-        _root, ext = os.path.splitext(file_path)
-        if ext == '.py':
-            path_list = os.path.abspath(os.path.normpath(file_path)).split(os.sep)
-            path_list.pop(0) # Root
-            path_list[-1] = os.path.splitext(path_list[-1])[0] + '.pyi'
-            out_path = os.path.join(stubs_dir, *path_list)
-            out_dir = os.path.dirname(out_path)
-            if not os.path.exists(out_dir):
-                os.makedirs(out_dir)
+#         _root, ext = os.path.splitext(file_path)
+        if os.path.splitext(file_path)[1] == '.py':
+            out_path = _new_file_path(stubs_dir, file_path, makedirs=True)
+#             path_list = os.path.abspath(os.path.normpath(file_path)).split(os.sep)
+#             path_list.pop(0) # Root
+#             path_list[-1] = os.path.splitext(path_list[-1])[0] + '.pyi'
+#             out_path = os.path.join(stubs_dir, *path_list)
+#             out_dir = os.path.dirname(out_path)
+#             if not os.path.exists(out_dir):
+#                 os.makedirs(out_dir)
             print(out_path)
             with open(out_path, 'w') as stream:
                 now = datetime.datetime.now()
@@ -36,36 +51,85 @@ def write_all_stub_files(ti, stubs_dir):
                 stream.write('\n')
 
 def dump_docstrings(ti, stream=sys.stdout, reverse_lines=False):
-        stream.write(' dump_docstrings '.center(75, '-'))
-        stream.write('\n')
-        # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
-        for file_path in sorted(ti.file_paths()):
-            stream.write('File: {:s}\n'.format(file_path))
-            try:
-                docstring_map = ti.docstring_map(file_path, style='sphinx')
-            except Exception as err:
-                logging.error('Can not write docstring for file "{:s}": {!r:s}, {:s}'.format(file_path, type(err), str(err)))
-                logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+    stream.write(' dump_docstrings '.center(75, '-'))
+    stream.write('\n')
+    # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
+    for file_path in sorted(ti.file_paths()):
+        stream.write('File: {:s}\n'.format(file_path))
+        try:
+            docstring_map = ti.docstring_map(file_path, style='sphinx')
+        except Exception as err:
+            logging.error('Can not write docstring for file "{:s}": {!r:s}, {:s}'.format(file_path, type(err), str(err)))
+            logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+        else:
+            if reverse_lines:
+                keys = reversed(sorted(docstring_map.keys()))
             else:
-                if reverse_lines:
-                    keys = reversed(sorted(docstring_map.keys()))
-                else:
-                    keys = sorted(docstring_map.keys())
-                for lineno in keys:
-                    namespace, function_name, docstring = docstring_map[lineno]
-                    prefix = '    '
-                    if namespace != '':
-                        prefix *= 1 + len(namespace.split('.'))
-                    stream.write('Namespace: "{:s}"\n'.format(namespace))
-                    stream.write('Function: "{:s}" [{:d}]:\n'.format(function_name, lineno))
-                    for aline in docstring.split('\n'):
-                        stream.write('{:s}{:s}\n'.format(prefix, aline))
-                    stream.write('\n')
-        stream.write(' END: dump_docstrings '.center(75, '-'))
-        stream.write('\n')
+                keys = sorted(docstring_map.keys())
+            for lineno in keys:
+                namespace, function_name, docstring = docstring_map[lineno]
+                prefix = '    '
+                if namespace != '':
+                    prefix *= 1 + len(namespace.split('.'))
+                stream.write('Namespace: "{:s}"\n'.format(namespace))
+                stream.write('Function: "{:s}" [{:d}]:\n'.format(function_name, lineno))
+                for aline in docstring.split('\n'):
+                    stream.write('{:s}{:s}\n'.format(prefix, aline))
+                stream.write('\n')
+    stream.write(' END: dump_docstrings '.center(75, '-'))
+    stream.write('\n')
 
-def compile_and_exec(root_path, stubs_dir, filename, *args, **kwargs):
-    print('TRACE:', root_path, stubs_dir, filename, args)
+def dump_type_inferencer(ti, stream=sys.stdout):
+    stream.write(' ti.dump() '.center(75, '-'))
+    stream.write('\n')
+    ti.dump(stream=stream)
+    stream.write(' END: ti.dump() '.center(75, '-'))
+    stream.write('\n')
+
+def print_pretty_format(ti, root_path, stream=sys.stdout):
+    stream.write(' ti.pretty_format() '.center(75, '-'))
+    stream.write('\n')
+    file_paths = ti.file_paths_filtered(root_path, relative=True)
+    for key, file_path in file_paths:
+#         print(os.path.join(cli_args.stubs, file_path))
+        stream.write(file_path)
+        stream.write('\n')
+        stream.write(ti.pretty_format(key))
+        stream.write('\n')
+    stream.write(' END: ti.pretty_format() '.center(75, '-'))
+    stream.write('\n')
+
+def insert_docstrings(ti, doc_dir):
+    # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
+    for file_path in sorted(ti.file_paths()):
+        try:
+            # {line_number : (namespace, function_name, docstring), ...}
+            docstring_map = ti.docstring_map(file_path, style='sphinx')
+        except Exception as err:
+            logging.error('Can not rewrite file "{:s}": {!r:s}, {:s}'.format(file_path, type(err), str(err)))
+            logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+        else:
+            with open(file_path) as f:
+                src_lines = f.readlines()
+            out_path = _new_file_path(doc_dir, file_path, makedirs=True)
+            for lineno in reversed(sorted(docstring_map.keys())):
+#                 docstring_lines = docstring_map[lineno][2].split('\n')
+#                 docstring = docstring_map[lineno][2]
+                namespace, _function_name, docstring = docstring_map[lineno]
+                prefix = '    '
+                if namespace != '':
+                    prefix *= 1 + len(namespace.split('.'))
+                docstring = '"""{:s}"""'.format(docstring)
+                docstring_lines = ['{:s}{:s}\n'.format(prefix, aline) for aline in docstring.split('\n')]
+                src_lines = src_lines[:lineno] \
+                    + docstring_lines \
+                    + src_lines[lineno:] 
+            with open(out_path, 'w') as f:
+                for aline in src_lines:
+                    f.write(aline)
+
+def compile_and_exec(filename, *args, **kwargs):
+    print('TRACE: compile_and_exec()', filename, args, kwargs)
     sys.argv = [filename] + list(args)
     logging.debug('typein_cli.compile_and_exec({:s})'.format(filename))
     with open(filename) as f_obj:
@@ -73,26 +137,12 @@ def compile_and_exec(root_path, stubs_dir, filename, *args, **kwargs):
         logging.debug('typein_cli.compile_and_exec() read {:d} lines'.format(src.count('\n')))
         code = compile(src, filename, 'exec')
         with type_inferencer.TypeInferencer() as ti:
-            #             exec(code, globals())
             try:
                 exec(code, globals())#, locals())
             except SystemExit:
                 # Trap CLI code that calls exit() or sys.exit()
                 pass
-            #         print('ti.pretty_format()')
-            #         print(ti.pretty_format())
-        print(' ti.pretty_format() '.center(75, '-'))
-        file_paths = ti.file_paths_filtered(root_path, relative=True)
-        for key, file_path in file_paths:
-            print(os.path.join(stubs_dir, file_path))
-            print(ti.pretty_format(key))
-        print(' END: ti.pretty_format() '.center(75, '-'))
-        print(' ti.dump() '.center(75, '-'))
-        ti.dump()
-        print(' END: ti.dump() '.center(75, '-'))
-        if stubs_dir:
-            write_all_stub_files(ti, stubs_dir)
-        dump_docstrings(ti)
+    return ti
 
 class BaseClass:
     def __init__(self):
@@ -192,8 +242,13 @@ USAGE
     parser.add_argument("-s", "--stubs",
                          type=str,
                          dest="stubs",
-                         default="stubs",
+                         default="",
                          help="Directory to write stubs files. [default: %(default)s]")
+    parser.add_argument("-w", "--write-docstrings",
+                         type=str,
+                         dest="write_docstrings",
+                         default="",
+                         help="Directory to write source code with docstrings. [default: %(default)s]")
     parser.add_argument("-r", "--root",
                          type=str,
                          dest="root",
@@ -217,7 +272,17 @@ USAGE
     root_path = os.path.abspath(os.path.normpath(cli_args.root))
 #     test()
     target_args = cli_args.argstring.split(' ')
-    compile_and_exec(root_path, cli_args.stubs, cli_args.program, *target_args)
+
+    ti = compile_and_exec(cli_args.program, *target_args)
+    # Output
+    print_pretty_format(ti, root_path)
+    dump_type_inferencer(ti)
+    if cli_args.stubs:
+        write_all_stub_files(ti, cli_args.stubs)
+    dump_docstrings(ti)
+    if cli_args.write_docstrings:
+        insert_docstrings(ti, cli_args.write_docstrings)
+
     print(' CPU time = {:8.3f} (S)'.format(time.time() - start_time))
     print('CPU clock = {:8.3f} (S)'.format(time.clock() - start_clock))
     print('Bye, bye!')
