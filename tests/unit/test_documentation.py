@@ -133,3 +133,46 @@ def test_function_raises_does_see_return():
 :raises: ``TypeError, ValueError``"""
     assert docstring == expected_docstring
     
+def test_simple_class_docstring___init__():
+    """A simple class with a constructor and a single method."""
+    class Simple:
+        def __init__(self, first_name, last_name):
+            self.first_name = first_name
+            self.last_name = last_name
+        def name(self):
+            return '{:s}, {:s}'.format(self.last_name, self.first_name)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        s = Simple('First', 'Last')
+        s.name()
+    _line, docstring = ti.docstring(__file__, 'Simple', '__init__', style='sphinx')
+#     print()
+#     print(docstring)
+    expected_docstring = """<insert documentation for function>
+
+:param first_name: <insert documentation for argument>
+:type first_name: ``str``
+
+:param last_name: <insert documentation for argument>
+:type last_name: ``str``"""
+    assert docstring == expected_docstring
+
+def test_simple_class_docstring_name():
+    """A simple class with a constructor and a single method."""
+    class Simple:
+        def __init__(self, first_name, last_name):
+            self.first_name = first_name
+            self.last_name = last_name
+        def name(self):
+            return '{:s}, {:s}'.format(self.last_name, self.first_name)
+        
+    with type_inferencer.TypeInferencer() as ti:
+        s = Simple('First', 'Last')
+        s.name()
+    _line, docstring = ti.docstring(__file__, 'Simple', 'name', style='sphinx')
+#     print()
+#     print(docstring)
+    expected_docstring = """<insert documentation for function>
+
+:returns: ``str`` -- <insert documentation for return values>"""
+    assert docstring == expected_docstring

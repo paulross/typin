@@ -386,37 +386,39 @@ class FunctionTypes:
     def _insert_doc_marker(self, suffix):
         return '<insert documentation for {:s}>'.format(suffix)
 
-    def _docstring_sphinx(self):
+    def _docstring_sphinx(self, include_returns):
         str_l = []
         str_l.append(self._insert_doc_marker('function'))
-        str_l.append('')
+#         str_l.append('')
         arg_types = self.argument_type_strings
         # Arguments, optional
         for i, (arg, types) in enumerate(arg_types.items()):
             if i == 0 and arg == self.SELF:
                 # Skip the self argument
                 continue
+            str_l.append('')            
             str_l.append(':param {:s}: {:s}'.format(
                 arg,
                 self._insert_doc_marker('argument'))
             )
             str_l.append(':type {:s}: ``{:s}``'.format(arg, ', '.join(sorted(types))))
+        if include_returns:
             str_l.append('')
-        # Returns
-        return_types = set()
-        for set_returns in self.return_type_strings.values():
-            return_types |= set_returns
-        # :returns:  int -- the return code.
-        str_return_types = ','.join(sorted(return_types))
-        if str_return_types == 'NoneType':
-            str_l.append(':returns: ``{:s}``'.format(str_return_types))
-        else:
-            str_l.append(
-                ':returns: ``{:s}`` -- {:s}'.format(
-                    str_return_types,
-                    self._insert_doc_marker('return values'),
+            # Returns
+            return_types = set()
+            for set_returns in self.return_type_strings.values():
+                return_types |= set_returns
+            # :returns:  int -- the return code.
+            str_return_types = ','.join(sorted(return_types))
+            if str_return_types == 'NoneType':
+                str_l.append(':returns: ``{:s}``'.format(str_return_types))
+            else:
+                str_l.append(
+                    ':returns: ``{:s}`` -- {:s}'.format(
+                        str_return_types,
+                        self._insert_doc_marker('return values'),
+                    )
                 )
-            )
         # Exceptions, optional
         if len(self._exception_types) > 0:
             str_l.append('')
@@ -430,7 +432,7 @@ class FunctionTypes:
 #         str_l = []
 #         return '\n'.join(str_l)
 
-    def docstring(self, style='sphinx'):
+    def docstring(self, include_returns, style='sphinx'):
         """Returns a pair (line_number, docstring) for this function. The
         docstring is the __doc__ for the function and the line_number is the
         docstring position (function declaration + 1).
@@ -443,4 +445,4 @@ class FunctionTypes:
             'sphinx' : self._docstring_sphinx,
 #             'google' : self._docstring_google,
         }
-        return self.line_decl, despatch[style]()
+        return self.line_decl, despatch[style](include_returns)

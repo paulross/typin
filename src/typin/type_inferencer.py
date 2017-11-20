@@ -241,7 +241,8 @@ class TypeInferencer(object):
     def docstring(self, file_path, namespace, function_name, style='sphinx'):
         """Returns a pair (line_number, docstring) for the function."""
         fts = self.function_types(file_path, namespace, function_name)
-        return fts.docstring(style)
+        include_returns = function_name != '__init__'
+        return fts.docstring(include_returns, style)
 
     def docstring_map(self, file_path, style='sphinx'):
         """Returns a dict of {line_number : (namespace, function_name, docstring), ...} for the file."""
@@ -249,7 +250,8 @@ class TypeInferencer(object):
         for namespace in self.function_map[file_path]:
             for function_name in self.function_map[file_path][namespace]:
                 fts = self.function_map[file_path][namespace][function_name]
-                lineno, docstring = fts.docstring(style)
+                include_returns = function_name != '__init__'
+                lineno, docstring = fts.docstring(include_returns, style)
                 if lineno in line_docs:
                     raise TypeInferencerExceptionConflictingLines('Line {:d} appears twice'.format(lineno))
                 line_docs[lineno] = (namespace, function_name, docstring)
