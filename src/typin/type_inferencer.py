@@ -331,6 +331,7 @@ class TypeInferencer(object):
           This is really expensive, surely there is a better way?
         * It frequently fails to discover base class types for reasons not yet
           well understood.
+        * Functions declared within functions fail.
 
         If this can be made more reliable then cacheing could help to make the
         performance problem go away.
@@ -417,6 +418,108 @@ class TypeInferencer(object):
         if self._trace_flag:
             print(*args)
         logging.error(*args)
+        
+    def _assert_exception_propagates(self, event, arg, frame_info):
+        """Does some asserts when an exception is propagates from a function."""
+        assert event == 'return', 'Event is "{!r:s}"'.format(event)
+        assert arg is None, 'arg is {!r:s} instead of None'.format(arg)
+        assert self.exception_in_progress is not None, \
+            'self.exception_in_progress: {!r:s}'.format(self.exception_in_progress)
+        assert frame_info.filename == self.exception_in_progress.filename, \
+            '"return": File name was {:s} now {:s}'.format(
+                self.exception_in_progress.filename, frame_info.filename
+            )
+        assert frame_info.function == self.exception_in_progress.function, \
+            '"return": Function was "{:s}" now "{:s}"'.format(
+                self.exception_in_progress.function, frame_info.function
+            )
+        assert frame_info.lineno == self.exception_in_progress.lineno, \
+            '"return": Line number was {:d} now {:d}'.format(
+                self.exception_in_progress.lineno, frame_info.lineno 
+            )
+        assert self.exception_in_progress.eventno == self.eventno - 1, \
+            '"return": Event number was {:d}, expected {:d}'.format(
+                self.exception_in_progress.eventno, self.eventno - 1
+            ) 
+        
+    def _assert_exception_caught(self, event, arg, frame_info):
+        """Does some asserts when an exception is caught within a function."""
+        assert event == 'line', 'Event is "{!r:s}"'.format(event)
+        assert self.exception_in_progress is not None, \
+            'self.exception_in_progress: {!r:s}'.format(self.exception_in_progress)
+        assert arg is None, 'arg is {!r:s} instead of None'.format(arg)
+        assert frame_info.filename == self.exception_in_progress.filename, \
+            '"line": File name was {:s} now {:s}'.format(
+                self.exception_in_progress.filename, frame_info.filename
+            )
+        assert frame_info.function == self.exception_in_progress.function, \
+            '"line": Function was "{:s}" now "{:s}"'.format(
+                self.exception_in_progress.function, frame_info.function
+            )
+        # We have jumped forward in the function to the catch point so line
+        # number must be > than where originally raised.
+        assert frame_info.lineno > self.exception_in_progress.lineno, \
+            '"line": Line number was {:d} now {:d}'.format(
+                self.exception_in_progress.lineno, frame_info.lineno 
+            )
+        assert self.exception_in_progress.eventno == self.eventno - 1, \
+            '"line": Event number was {:d}, expected {:d}'.format(
+                self.exception_in_progress.eventno, self.eventno - 1
+            ) 
+
+    def _process_call_return_exception(self, frame, event, arg, frame_info, func_types):
+        assert event in ('call', 'return', 'exception')
+        if event == 'call':
+            # arg is None
+            func_types.add_call(inspect.getargvalues(frame),
+                                frame_info.filename,
+                                frame_info.lineno)
+        elif event == 'return':
+            if self.exception_in_progress is not None:
+                self._assert_exception_propagates(event, arg, frame_info)
+                # Ignore spurious return after exception instead add
+                # a propagated exception.
+                self._trace('TRACE: "return": adding exception:', self.exception_in_progress)
+                func_types.add_exception(
+                    self.exception_in_progress.exception_value,
+                    self.exception_in_progress.lineno
+                )
+                self.exception_in_progress = None
+            else:
+                self._trace('TRACE: "return": adding return value:', arg,
+                            frame_info.lineno)
+                # arg is a valid return value
+                func_types.add_return(arg, frame_info.lineno)
+        else:
+            assert event == 'exception'
+            # arg is a tuple (exception_type, exception_value, traceback)
+            # For a stop iteration these values are: (<class 'StopIteration'>, StopIteration(), None)
+            exception_type, exception_value, exception_traceback = arg
+            self._trace('TRACE:', frame_info.filename, frame_info.function,
+                        frame_info.lineno, exception_type, repr(exception_value),
+                        repr(exception_traceback))
+            # Ignore exceptions caused by co-routines as that is just for flow of control.
+            if exception_type not in (StopIteration, GeneratorExit):
+                # func_types.add_exception(arg[1], lineno)
+                # Fields: filename function lineno exception_value eventno
+                assert self.exception_in_progress is None, \
+                    'File: {:s}, function: {:s}, exception {:s} type {!r:s} in flight from line {:d}, now see exception event {:s} at {:d}'.format(
+                        frame_info.filename,
+                        frame_info.function,
+                        repr(self.exception_in_progress.exception_value),
+                        type(self.exception_in_progress.exception_value),
+                        self.exception_in_progress.lineno,
+                        repr(exception_value),
+                        frame_info.lineno
+                    )
+                # Fields: filename, function, lineno, exception_value, eventno
+                self.exception_in_progress = ExceptionInProgress(
+                    frame_info.filename,
+                    frame_info.function,
+                    frame_info.lineno,
+                    exception_value,
+                    self.eventno,
+                )
 
     def __call__(self, frame, event, arg):
         frame_info = inspect.getframeinfo(frame)
@@ -458,68 +561,9 @@ class TypeInferencer(object):
                     try:
                         self._set_bases(file_path, lineno, q_name, bases)
                         func_types = self._get_func_data(file_path, q_name)
-                        if event == 'call':
-                            # arg is None
-                            func_types.add_call(inspect.getargvalues(frame), file_path, lineno)
-                        elif event == 'return':
-                            if self.exception_in_progress is not None:
-                                assert arg is None, 'arg is {!r:s} instead of None'.format(arg)
-                                assert frame_info.filename == self.exception_in_progress.filename, \
-                                    '"return": File name was {:s} now {:s}'.format(
-                                        self.exception_in_progress.filename, frame_info.filename
-                                    )
-                                assert frame_info.function == self.exception_in_progress.function, \
-                                    '"return": Function was "{:s}" now "{:s}"'.format(
-                                        self.exception_in_progress.function, frame_info.function
-                                    )
-                                assert frame_info.lineno == self.exception_in_progress.lineno, \
-                                    '"return": Line number was {:d} now {:d}'.format(
-                                        self.exception_in_progress.lineno, frame_info.lineno 
-                                    )
-                                assert self.exception_in_progress.eventno == self.eventno - 1, \
-                                    '"return": Event number was {:d}, expected {:d}'.format(
-                                        self.exception_in_progress.eventno, self.eventno - 1
-                                    ) 
-                                # Ignore spurious return after exception instead add
-                                # a propagated exception.
-                                self._trace('TRACE: "return": adding exception:', self.exception_in_progress)
-                                func_types.add_exception(
-                                    self.exception_in_progress.exception_value,
-                                    self.exception_in_progress.lineno
-                                )
-                                self.exception_in_progress = None
-                            else:
-                                self._trace('TRACE: "return": adding return value:', arg, lineno)
-                                # arg is a valid return value
-                                func_types.add_return(arg, lineno)
-                        else:
-                            assert event == 'exception'
-                            # arg is a tuple (exception_type, exception_value, traceback)
-                            # For a stop iteration these values are: (<class 'StopIteration'>, StopIteration(), None)
-                            exception_type, exception_value, exception_traceback = arg
-                            self._trace('TRACE:', frame_info.filename, frame_info.function, lineno, exception_type, repr(exception_value), repr(exception_traceback))
-                            # Ignore exceptions caused by co-routines as that is just for flow of control.
-                            if exception_type not in (StopIteration, GeneratorExit):
-                                # func_types.add_exception(arg[1], lineno)
-                                # Fields: filename function lineno exception_value eventno
-                                assert self.exception_in_progress is None, \
-                                    'File: {:s}, function: {:s}, exception {:s} type {!r:s} in flight from line {:d}, now see exception event {:s} at {:d}'.format(
-                                        frame_info.filename,
-                                        frame_info.function,
-                                        repr(self.exception_in_progress.exception_value),
-                                        type(self.exception_in_progress.exception_value),
-                                        self.exception_in_progress.lineno,
-                                        repr(exception_value),
-                                        lineno
-                                    )
-                                # Fields: filename, function, lineno, exception_value
-                                self.exception_in_progress = ExceptionInProgress(
-                                    frame_info.filename,
-                                    frame_info.function,
-                                    lineno,
-                                    exception_value,
-                                    self.eventno,
-                                )
+                        self._process_call_return_exception(frame, event, arg,
+                                                            frame_info, func_types)
+                        
                     except Exception as err:
                         self._error(
                             'ERROR: Could not add event "{:s}" Function: {:s} File: {:s}#{:d}'.format(
@@ -539,24 +583,7 @@ class TypeInferencer(object):
                 if self.exception_in_progress is not None:
                     self._trace('TRACE: Exception in flight followed by line event', frame_info.filename, frame_info.function, lineno)
                     # The exception has been caught within the function
-                    assert arg is None, 'arg is {!r:s} instead of None'.format(arg)
-                    assert frame_info.filename == self.exception_in_progress.filename, \
-                        '"line": File name was {:s} now {:s}'.format(
-                            self.exception_in_progress.filename, frame_info.filename
-                        )
-                    assert frame_info.function == self.exception_in_progress.function, \
-                        '"line": Function was "{:s}" now "{:s}"'.format(
-                            self.exception_in_progress.function, frame_info.function
-                        )
-                    # We have jumped forward in the function to the catch point
-                    assert frame_info.lineno > self.exception_in_progress.lineno, \
-                        '"line": Line number was {:d} now {:d}'.format(
-                            self.exception_in_progress.lineno, frame_info.lineno 
-                        )
-                    assert self.exception_in_progress.eventno == self.eventno - 1, \
-                        '"line": Event number was {:d}, expected {:d}'.format(
-                            self.exception_in_progress.eventno, self.eventno - 1
-                        ) 
+                    self._assert_exception_caught(event, arg, frame_info)
                     self.exception_in_progress = None
         self.eventno += 1
         self._trace()
