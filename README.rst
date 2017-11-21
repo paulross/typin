@@ -72,10 +72,8 @@ the line number where it should be inserted::
     """
     # 'line_number' is the line of the function definition where the documentation string
     # should be inserted and typin can do all of that for you:
-    with open(__file__) as f:
-        src = f.readlines()
     # Insert template docstrings into the source code.
-    new_src = ti.insert_docstrings(__file__, src, style='sphinx')
+    new_src = ti.insert_docstrings(__file__, style='sphinx')
     with open(__file__, 'w') as f:
         for line in new_src:
             f.write(line)

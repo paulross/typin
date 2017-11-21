@@ -96,7 +96,7 @@ def insert_docstrings(ti, doc_dir, style=type_inferencer.TypeInferencer.DOCSTRIN
     # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
     for file_path in sorted(ti.file_paths()):
         out_path = _new_file_path(doc_dir, file_path, makedirs=True)
-        src_lines = ti.insert_docstrings(file_path, src_lines=None, style=style)
+        src_lines = ti.insert_docstrings(file_path, style=style)
         with open(out_path, 'w') as f:
             for aline in src_lines:
                 f.write(aline)

@@ -661,13 +661,13 @@ class TypeInferencer(object):
         sys.settrace(self._trace_fn_stack.pop())
         self._cleanup()
 
-    def insert_docstrings(self, file_path, src_lines, style=DOCSTRING_STYLE_DEFAULT):
+    def insert_docstrings(self, file_path, src_lines=None, style=DOCSTRING_STYLE_DEFAULT):
         """Injects the documentation strings into lines of source code.
 
         :param file_path: Path to the source file.
         :type file_path: ``str``
 
-        :param src_lines: List of source lines, if None then file_path will be read.
+        :param src_lines: List of source lines, if None (default) then file_path will be read.
         :type src_lines: ``list([str]),NoneType``
 
         :param style: Docstring style.
