@@ -169,7 +169,8 @@ class FunctionTypes:
         # dict of {line_number : set(types.Type), ...}
         self._exception_types = {}
         # There should be at least one of these, possibly others for generators
-        # where yield is a re-entry point
+        # where yield is a re-entry point.
+        # The [0] element will be the lowest value, the others are unordered.
         self.call_line_numbers = []
         # Line numbers:
         # No general sanity check is possible on the ordering of line numbers
@@ -271,8 +272,10 @@ class FunctionTypes:
             if line_number not in self.call_line_numbers:
                 self.call_line_numbers.append(line_number)
             # No general sanity check is possible on the ordering of line numbers
-            # since property setters and getters can be called in any order.
-            # Generators have a call site at declaration and each yield statement
+            # since property setters and getters appear as the same
+            # function and can be called in any order.
+            # Generators have a call site at declaration and each yield
+            # statement
         self.min_line_number = min(self.min_line_number, line_number)
         self.max_line_number = max(self.max_line_number, line_number)
 

@@ -617,8 +617,10 @@ class TypeInferencer(object):
                 if ns != self.GLOBAL_NAMESPACE:
                     class_names.append(ns.split('.')[-1])
             names_to_remove = []
+            # TODO: Remove functions by reading the source and checking
+            # RE_FUNCTION matches? Need to take care of decorators.
             if self.GLOBAL_NAMESPACE in self.function_map[file_path]:
-                for function_name in  self.function_map[file_path][self.GLOBAL_NAMESPACE]:
+                for function_name in self.function_map[file_path][self.GLOBAL_NAMESPACE]:
                     if function_name in class_names:
                         names_to_remove.append(function_name)
             if len(names_to_remove):

@@ -18,7 +18,6 @@ def test_function_raises_ValueError():
 def test_function():
     assert function('Hi', 2) == 'Hi Hi'
 
-
 def function_checks_type(s, num):
     if not isinstance(s, str):
         raise TypeError('s must be an string, not {:s}'.format(type(num)))
@@ -38,7 +37,6 @@ def test_function_checks_type_raises_TypeError():
 def test_function_checks_type_raises_ValueError():
     with pytest.raises(ValueError):
         function_checks_type('Hi', 0)
-
 
 def test_function_annotation():
     with type_inferencer.TypeInferencer() as ti:
@@ -186,3 +184,50 @@ def test_simple_class_docstring_name():
 :returns: ``str`` -- <insert documentation for return values>
 \"\"\""""
     assert docstring == expected_docstring
+
+def test_docstring_with_function_that_always_raises_stub_string():
+    def function(s, num):
+        raise ValueError('')
+    
+    with type_inferencer.TypeInferencer() as ti:
+        try:
+            function('Hi', 0)
+        except ValueError:
+            pass
+    expected = [
+        'def function(s: str, num: int) -> None: ...',
+    ]
+#     print()
+#     print(ti.pretty_format(__file__))
+    assert ti.pretty_format(__file__) == '\n'.join(expected)
+    assert ti.stub_file_str(__file__, '', 'function') \
+        == 'def function(s: str, num: int) -> None: ...'
+
+def test_docstring_with_function_that_always_raises_docstring():
+    def function(s, num):
+        raise ValueError('')
+    
+    with type_inferencer.TypeInferencer() as ti:
+        try:
+            function('Hi', 0)
+        except ValueError:
+            pass
+    _line, docstring = ti.docstring(__file__, '', 'function', style='sphinx')
+#     print()
+#     print(docstring)
+    expected_docstring = """\"\"\"
+<insert documentation for function>
+
+:param s: <insert documentation for argument>
+:type s: ``str``
+
+:param num: <insert documentation for argument>
+:type num: ``int``
+
+:returns: ```` -- <insert documentation for return values>
+
+:raises: ``ValueError``
+\"\"\""""
+    assert docstring == expected_docstring
+
+

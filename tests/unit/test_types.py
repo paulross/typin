@@ -207,10 +207,46 @@ def test_inspect_ArgInfo():
 def test_FunctionTypes_ctor():
     types.FunctionTypes()
 
-def test_FunctionTypes_raises_no_data():
+def test_FunctionTypes_never_called_raises_no_data():
     fts = types.FunctionTypes()
     with pytest.raises(types.FunctionTypesExceptionNoData):
         fts.line_range()
+
+def test_FunctionTypes_never_called_stub_file_str():
+    fts = types.FunctionTypes()
+    assert fts.stub_file_str() == '() -> None: ...'
+
+def test_FunctionTypes_never_called_docstring():
+    fts = types.FunctionTypes()
+    with pytest.raises(types.FunctionTypesExceptionNoData):
+        fts.docstring(include_returns=True)
+
+def test_FunctionTypes_called_never_returned_stub_file_str():
+    # Example a function that always raises
+    # TODO: This is at variance with the next test
+    fts = types.FunctionTypes()
+    ai = ArgInfo(['i'], None, None, {'i' : 42})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    assert fts.stub_file_str() == '(i: int) -> None: ...'
+
+def test_FunctionTypes_called_never_returned_docstring():
+    # Example a function that always raises :returns: ````
+    fts = types.FunctionTypes()
+    ai = ArgInfo(['i'], None, None, {'i' : 42})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+#     print()
+#     print(fts.docstring(include_returns=True))
+    exp = (
+        100,
+        """\"\"\"
+<insert documentation for function>
+
+:param i: <insert documentation for argument>
+:type i: ``int``
+
+:returns: ```` -- <insert documentation for return values>
+\"\"\"""")
+    assert fts.docstring(include_returns=True) == exp
 
 def test_FunctionTypes_add_call_add_return():
     fts = types.FunctionTypes()
