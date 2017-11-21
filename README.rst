@@ -70,8 +70,6 @@ the line number where it should be inserted::
     
     :raises: ``ValueError``
     """
-    # 'line_number' is the line of the function definition where the documentation string
-    # should be inserted and typin can do all of that for you:
     # Insert template docstrings into the source code.
     new_src = ti.insert_docstrings(__file__, style='sphinx')
     with open(__file__, 'w') as f:
