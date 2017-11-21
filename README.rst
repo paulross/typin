@@ -61,14 +61,14 @@ the line number where it should be inserted::
     <insert documentation for function>
     
     :param s: <insert documentation for argument>
-    :type s: str
+    :type s: ``str``
     
     :param num: <insert documentation for argument>
-    :type num: int
+    :type num: ``int``
     
-    :returns: str -- <insert documentation for return values>
+    :returns: ``str`` -- <insert documentation for return values>
     
-    :raises: ValueError
+    :raises: ``ValueError``
     """
     # 'line_number' is the line of the function definition where the documentation string
     # should be inserted and typin can do all of that for you:

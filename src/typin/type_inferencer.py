@@ -667,14 +667,17 @@ class TypeInferencer(object):
         :param file_path: Path to the source file.
         :type file_path: ``str``
 
-        :param src_lines: List of source lines.
-        :type src_lines: ``list([str])``
+        :param src_lines: List of source lines, if None then file_path will be read.
+        :type src_lines: ``list([str]),NoneType``
 
         :param style: Docstring style.
         :type style: ``str``
 
         :return: ``list([str])`` -- List of source lines with docstrings inserted.
         """
+        if src_lines is None:
+            with open(file_path) as f:
+                src_lines = f.readlines()
         docstring_map = self.docstring_map(file_path, style=style)
         for lineno in reversed(sorted(docstring_map.keys())):
             # print('TRACE:', lineno, src_lines[lineno - 1])
