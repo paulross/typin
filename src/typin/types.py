@@ -390,7 +390,7 @@ class FunctionTypes:
         return '<insert documentation for {:s}>'.format(suffix)
 
     def _docstring_sphinx(self, include_returns):
-        str_l = []
+        str_l = ['"""']
         str_l.append(self._insert_doc_marker('function'))
 #         str_l.append('')
         arg_types = self.argument_type_strings
@@ -429,6 +429,7 @@ class FunctionTypes:
             for e in self.exception_type_strings.values():
                 excepts |= e
             str_l.append(':raises: ``{:s}``'.format(', '.join(sorted(excepts))))
+        str_l.append('"""')
         return '\n'.join(str_l)
 
 #     def _docstring_google(self):

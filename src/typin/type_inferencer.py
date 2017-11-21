@@ -682,7 +682,7 @@ class TypeInferencer(object):
             prefix = '    '
             if namespace != '':
                 prefix *= 1 + len(namespace.split('.'))
-            docstring = '"""{:s}"""'.format(docstring)
+            # docstring = '"""{:s}"""'.format(docstring)
             docstring_lines = ['{:s}{:s}\n'.format(prefix, aline) for aline in docstring.split('\n')]
             # With decorators the lineno is the line of the decorator, not the function.
             while RE_DECORATOR.match(src_lines[lineno - 1]):

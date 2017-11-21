@@ -58,7 +58,8 @@ def test_function_annotation():
     _line, docstring = ti.docstring(__file__, '', 'function', style='sphinx')
 #     print()
 #     print(docstring)
-    expected_docstring = """<insert documentation for function>
+    expected_docstring = """\"\"\"
+<insert documentation for function>
 
 :param s: <insert documentation for argument>
 :type s: ``str``
@@ -68,9 +69,10 @@ def test_function_annotation():
 
 :returns: ``str`` -- <insert documentation for return values>
 
-:raises: ``ValueError``"""
+:raises: ``ValueError``
+\"\"\""""
     assert docstring == expected_docstring
-    
+
 def test_function_raises_no_see_return():
     with type_inferencer.TypeInferencer() as ti:
         try:
@@ -88,7 +90,8 @@ def test_function_raises_no_see_return():
     _line, docstring = ti.docstring(__file__, '', 'function_checks_type', style='sphinx')
 #     print()
 #     print(docstring)
-    expected_docstring = """<insert documentation for function>
+    expected_docstring = """\"\"\"
+<insert documentation for function>
 
 :param s: <insert documentation for argument>
 :type s: ``int, str``
@@ -98,9 +101,10 @@ def test_function_raises_no_see_return():
 
 :returns: ```` -- <insert documentation for return values>
 
-:raises: ``TypeError, ValueError``"""
+:raises: ``TypeError, ValueError``
+\"\"\""""
     assert docstring == expected_docstring
-    
+
 def test_function_raises_does_see_return():
     with type_inferencer.TypeInferencer() as ti:
         try:
@@ -120,7 +124,8 @@ def test_function_raises_does_see_return():
     _line, docstring = ti.docstring(__file__, '', 'function_checks_type', style='sphinx')
 #     print()
 #     print(docstring)
-    expected_docstring = """<insert documentation for function>
+    expected_docstring = """\"\"\"
+<insert documentation for function>
 
 :param s: <insert documentation for argument>
 :type s: ``int, str``
@@ -130,9 +135,10 @@ def test_function_raises_does_see_return():
 
 :returns: ``str`` -- <insert documentation for return values>
 
-:raises: ``TypeError, ValueError``"""
+:raises: ``TypeError, ValueError``
+\"\"\""""
     assert docstring == expected_docstring
-    
+
 def test_simple_class_docstring___init__():
     """A simple class with a constructor and a single method."""
     class Simple:
@@ -141,20 +147,22 @@ def test_simple_class_docstring___init__():
             self.last_name = last_name
         def name(self):
             return '{:s}, {:s}'.format(self.last_name, self.first_name)
-        
+
     with type_inferencer.TypeInferencer() as ti:
         s = Simple('First', 'Last')
         s.name()
     _line, docstring = ti.docstring(__file__, 'Simple', '__init__', style='sphinx')
 #     print()
 #     print(docstring)
-    expected_docstring = """<insert documentation for function>
+    expected_docstring = """\"\"\"
+<insert documentation for function>
 
 :param first_name: <insert documentation for argument>
 :type first_name: ``str``
 
 :param last_name: <insert documentation for argument>
-:type last_name: ``str``"""
+:type last_name: ``str``
+\"\"\""""
     assert docstring == expected_docstring
 
 def test_simple_class_docstring_name():
@@ -165,14 +173,16 @@ def test_simple_class_docstring_name():
             self.last_name = last_name
         def name(self):
             return '{:s}, {:s}'.format(self.last_name, self.first_name)
-        
+
     with type_inferencer.TypeInferencer() as ti:
         s = Simple('First', 'Last')
         s.name()
     _line, docstring = ti.docstring(__file__, 'Simple', 'name', style='sphinx')
 #     print()
 #     print(docstring)
-    expected_docstring = """<insert documentation for function>
+    expected_docstring = """\"\"\"
+<insert documentation for function>
 
-:returns: ``str`` -- <insert documentation for return values>"""
+:returns: ``str`` -- <insert documentation for return values>
+\"\"\""""
     assert docstring == expected_docstring

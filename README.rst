@@ -51,13 +51,14 @@ Then adding code that provokes the exception we can track that as well::
         except ValueError:
             pass
 
-Exception specification are not part of Python's type annotation but they are
+Exception specifications are not part of Python's type annotation but they are
 part of of the Sphinx documentation string standard and ``typin`` can provide that, and
 the line number where it should be inserted::
 
     line_number, docstring = ti.docstring(__file__, '', 'function', style='sphinx')
-    '"""{:s}"""'.format(docstring)
-    """<insert documentation for function>
+    docstring
+    """
+    <insert documentation for function>
     
     :param s: <insert documentation for argument>
     :type s: str
@@ -67,29 +68,28 @@ the line number where it should be inserted::
     
     :returns: str -- <insert documentation for return values>
     
-    :raises: ValueError"""
+    :raises: ValueError
+    """
     # 'line_number' is the line of the function definition where the documentation string
-    # should be inserted. These can be inserted thus:
+    # should be inserted and typin can do all of that for you:
     with open(__file__) as f:
         src = f.readlines()
-    new_src = src[:line_number] + docstring.split('\n') + src[line_number:]
+    # Insert template docstrings into the source code.
+    new_src = ti.insert_docstrings(__file__, src, style='sphinx')
     with open(__file__, 'w') as f:
         for line in new_src:
             f.write(line)
-    # Obviously you want to insert the docstrings in reverse line order with multiple functions.
-    # ti.docstring_map(file_path) will return a dict of:
-    # {line_number : (namespace, function_name, docstring), ...}
-    # for the file.
 
 Sadly ``typin`` is not smart enough to write the documentation text for you :-)
 
 There is a CLI interface ``typin/src/typin/typin_cli.py`` to execute arbitrary
 python code using ``compile()`` and ``exec()`` like this::
     
-    python typin_cli.py --stubs=stubs -- example.py 'foo bar baz'
+    python typin_cli.py --stubs=stubs/ --write-docstrings=docstrings/ -- example.py 'foo bar baz'
 
 This will ``compile()/exec()`` ``example.py`` with the arguments ``foo bar baz``
-and dump out the results.
+write the stub files (``'.pyi'`` files) to ``stubs/`` and the source code with the docstrings
+inserted to ``docstrings/``.
 
 .. image:: https://img.shields.io/pypi/v/typin.svg
         :target: https://pypi.python.org/pypi/typin

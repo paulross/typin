@@ -139,7 +139,7 @@ def test_Type_dict_str_int_multiple():
          }
     )
     assert str(t) == 'dict({str : [int]})'
-  
+
 def test_Type_dict_str_number():
     t = types.Type(
         {
@@ -193,7 +193,7 @@ def test_Type_Inner__package__():
     assert not hasattr(Outer.Inner, '__package__')
 
 # Simulate what inspect.getargvalues(frame) returns
-ArgInfo = collections.namedtuple('ArgInfo', 'args, varargs, keywords, locals')    
+ArgInfo = collections.namedtuple('ArgInfo', 'args, varargs, keywords, locals')
 
 def test_inspect_ArgInfo():
     """Check that the version of the inspect module behaves as we expect."""
@@ -203,7 +203,7 @@ def test_inspect_ArgInfo():
     assert hasattr(arg_info, 'varargs')
     assert hasattr(arg_info, 'keywords')
     assert hasattr(arg_info, 'locals')
-    
+
 def test_FunctionTypes_ctor():
     types.FunctionTypes()
 
@@ -221,7 +221,7 @@ def test_FunctionTypes_add_call_add_return():
     fts.add_call(ai, '/foo/bar/baz.py', 100)
     fts.add_return(84, 101)
     assert fts.stub_file_str() == '(i: int) -> int: ...'
-    
+
 def test_FunctionTypes_add_call_add_return__str__():
     fts = types.FunctionTypes()
     # Simulate:
@@ -232,7 +232,7 @@ def test_FunctionTypes_add_call_add_return__str__():
     # (return_value, line_number)
     fts.add_return(84, 101)
     assert str(fts) == 'type: (i int) -> int'
-    
+
 def test_FunctionTypes_add_call_add_multiple_returns():
     fts = types.FunctionTypes()
     # Simulate:
@@ -247,7 +247,7 @@ def test_FunctionTypes_add_call_add_multiple_returns():
     fts.add_return('84', 102)
     assert fts.stub_file_str() == '(i: int) -> Union[int, str]: ...'
     assert fts.return_type_strings == {101: {'int'}, 102: {'str'}}
-    
+
 def test_FunctionTypes_add_call_add_yield():
     fts = types.FunctionTypes()
     # Simulate:
@@ -258,7 +258,7 @@ def test_FunctionTypes_add_call_add_yield():
     fts.add_call(ai, '/foo/bar/baz.py', 101)
     fts.add_return(84, 102)
     assert fts.stub_file_str() == '(i: int) -> int: ...'
-    
+
 def test_FunctionTypes_add_call_add_exception():
     fts = types.FunctionTypes()
     # Simulate:
@@ -289,12 +289,14 @@ def test_FunctionTypes_docstring_sphinx_simple():
 #     print(fts.docstring('sphinx'))
     expected = (
         100,
-        """<insert documentation for function>
+        """\"\"\"
+<insert documentation for function>
 
 :param i: <insert documentation for argument>
 :type i: ``int``
 
-:returns: ``int`` -- <insert documentation for return values>"""
+:returns: ``int`` -- <insert documentation for return values>
+\"\"\""""
     )
     assert fts.docstring('sphinx') == expected
 
