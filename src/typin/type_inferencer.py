@@ -24,6 +24,10 @@ class TypeInferencerExceptionConflictingLines(TypeInferencerExceptionBase):
     """Exception thrown when multiple functions appear on same line."""
     pass
 
+RE_DECORATOR = re.compile(r'\s*@(\S+)\s*')
+RE_FUNCTION = re.compile(r'\s*def\s+(\S+)\((.*)')
+RE_METHOD = re.compile(r'\s*def\s+(\S+)\(self(.*)')
+
 #: This is to hold exception data while we decide whether the exception is
 #: caught within a function (then we don't record the function as raising or
 #: propagating the exception) or not. See research.rst 2017-11-16 and 18.
@@ -50,6 +54,8 @@ class TypeInferencer(object):
     RE_TEMPORARY_FILE = re.compile(r'<(.+)>')
     GLOBAL_NAMESPACE = ''
     FALSE_FUNCTION_NAMES = ('<dictcomp>', '<genexpr>', '<listcomp>', '<module>', '<setcomp>')
+    DOCSTRING_STYLE_DEFAULT = 'sphinx'
+    DOCSTRING_STYLES_AVAILABLE = ('sphinx',)
     def __init__(self, verbose=0):
         """Constructor, takes no arguments, merely initialises internal state."""
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
@@ -68,8 +74,8 @@ class TypeInferencer(object):
         self.exception_in_progress = None
         # Event number for checking exceptions
         self.eventno = 0
-        # TODO: Have event counters for different events
-
+        # Event counters for different events, for the curious
+        self.event_counter = collections.Counter()
         # Used for trace/debug
         self._trace_flag = False
 
@@ -238,13 +244,13 @@ class TypeInferencer(object):
         fts = self.function_types(file_path, namespace, function_name)
         return 'def {:s}{:s}'.format(function_name, fts.stub_file_str())
 
-    def docstring(self, file_path, namespace, function_name, style='sphinx'):
+    def docstring(self, file_path, namespace, function_name, style=DOCSTRING_STYLE_DEFAULT):
         """Returns a pair (line_number, docstring) for the function."""
         fts = self.function_types(file_path, namespace, function_name)
         include_returns = function_name != '__init__'
         return fts.docstring(include_returns, style)
 
-    def docstring_map(self, file_path, style='sphinx'):
+    def docstring_map(self, file_path, style=DOCSTRING_STYLE_DEFAULT):
         """Returns a dict of {line_number : (namespace, function_name, docstring), ...} for the file."""
         line_docs = {}
         for namespace in self.function_map[file_path]:
@@ -526,6 +532,8 @@ class TypeInferencer(object):
                 )
 
     def __call__(self, frame, event, arg):
+        """Handle a trace event."""
+        self.event_counter.update({event : 1})
         frame_info = inspect.getframeinfo(frame)
         try:
             self._debug(
@@ -652,3 +660,44 @@ class TypeInferencer(object):
         # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())
         self._cleanup()
+
+    def insert_docstrings(self, file_path, src_lines, style=DOCSTRING_STYLE_DEFAULT):
+        """Injects the documentation strings into lines of source code.
+
+        :param file_path: Path to the source file.
+        :type file_path: ``str``
+
+        :param src_lines: List of source lines.
+        :type src_lines: ``list([str])``
+
+        :param style: Docstring style.
+        :type style: ``str``
+
+        :return: ``list([str])`` -- List of source lines with docstrings inserted.
+        """
+        docstring_map = self.docstring_map(file_path, style=style)
+        for lineno in reversed(sorted(docstring_map.keys())):
+            # print('TRACE:', lineno, src_lines[lineno - 1])
+            namespace, _function_name, docstring = docstring_map[lineno]
+            prefix = '    '
+            if namespace != '':
+                prefix *= 1 + len(namespace.split('.'))
+            docstring = '"""{:s}"""'.format(docstring)
+            docstring_lines = ['{:s}{:s}\n'.format(prefix, aline) for aline in docstring.split('\n')]
+            # With decorators the lineno is the line of the decorator, not the function.
+            while RE_DECORATOR.match(src_lines[lineno - 1]):
+                lineno += 1
+            if RE_FUNCTION.match(src_lines[lineno - 1]) is None:
+                # Example: members.sort(key=lambda t: (t[1], t[0]))
+                # lambda seen as function
+                logging.warning(
+                    'insert_docstrings(): file {:s}{:d} source line "{:s}" is not a function'.format(
+                        file_path, lineno, src_lines[lineno - 1].rstrip()
+                ))
+            else:
+                while '):' not in src_lines[lineno - 1]:
+                    # Arguments written over multiple lines
+                    lineno += 1
+                src_lines = src_lines[:lineno] + docstring_lines + src_lines[lineno:]
+        return src_lines
+

@@ -25,20 +25,22 @@ def _new_file_path(root, file_path, makedirs=False, new_ext=''):
     return out_path
 
 def write_all_stub_files(ti, stubs_dir):
+    """Writes out stubs files.
+
+    :param ti: The type inferencer.
+    :type ti: ``typin.type_inferencer.TypeInferencer``
+
+    :param stubs_dir: The directory to write to.
+    :type stubs_dir: ``str``
+
+    :return: ``NoneType``
+    """
     assert stubs_dir != ''
     stubs_dir = os.path.abspath(stubs_dir)
     print(' write_all_stub_files() '.center(75, '-'))
     for file_path in sorted(ti.file_paths()):
-#         _root, ext = os.path.splitext(file_path)
         if os.path.splitext(file_path)[1] == '.py':
             out_path = _new_file_path(stubs_dir, file_path, makedirs=True)
-#             path_list = os.path.abspath(os.path.normpath(file_path)).split(os.sep)
-#             path_list.pop(0) # Root
-#             path_list[-1] = os.path.splitext(path_list[-1])[0] + '.pyi'
-#             out_path = os.path.join(stubs_dir, *path_list)
-#             out_dir = os.path.dirname(out_path)
-#             if not os.path.exists(out_dir):
-#                 os.makedirs(out_dir)
             print(out_path)
             with open(out_path, 'w') as stream:
                 now = datetime.datetime.now()
@@ -57,7 +59,8 @@ def dump_docstrings(ti, stream=sys.stdout, reverse_lines=False):
     for file_path in sorted(ti.file_paths()):
         stream.write('File: {:s}\n'.format(file_path))
         try:
-            docstring_map = ti.docstring_map(file_path, style='sphinx')
+            docstring_map = ti.docstring_map(file_path,
+                                             style=type_inferencer.TypeInferencer.DOCSTRING_STYLE_DEFAULT)
         except Exception as err:
             logging.error('Can not write docstring for file "{:s}": {!r:s}, {:s}'.format(file_path, type(err), str(err)))
             logging.error(''.join(traceback.format_exception(*sys.exc_info())))
@@ -79,6 +82,27 @@ def dump_docstrings(ti, stream=sys.stdout, reverse_lines=False):
     stream.write(' END: dump_docstrings '.center(75, '-'))
     stream.write('\n')
 
+def insert_docstrings(ti, doc_dir, style=type_inferencer.TypeInferencer.DOCSTRING_STYLE_DEFAULT):
+    """Writes out source files with documentation strings.
+
+    :param ti: The type inferencer.
+    :type ti: ``typin.type_inferencer.TypeInferencer``
+
+    :param doc_dir: The directory to write to.
+    :type doc_dir: ``str``
+
+    :return: ``NoneType``
+    """
+    # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
+    for file_path in sorted(ti.file_paths()):
+        with open(file_path) as f:
+            src_lines = f.readlines()
+        out_path = _new_file_path(doc_dir, file_path, makedirs=True)
+        src_lines = ti.insert_docstrings(file_path, src_lines, style=style)
+        with open(out_path, 'w') as f:
+            for aline in src_lines:
+                f.write(aline)
+
 def dump_type_inferencer(ti, stream=sys.stdout):
     stream.write(' ti.dump() '.center(75, '-'))
     stream.write('\n')
@@ -98,35 +122,6 @@ def print_pretty_format(ti, root_path, stream=sys.stdout):
         stream.write('\n')
     stream.write(' END: ti.pretty_format() '.center(75, '-'))
     stream.write('\n')
-
-def insert_docstrings(ti, doc_dir):
-    # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
-    for file_path in sorted(ti.file_paths()):
-        try:
-            # {line_number : (namespace, function_name, docstring), ...}
-            docstring_map = ti.docstring_map(file_path, style='sphinx')
-        except Exception as err:
-            logging.error('Can not rewrite file "{:s}": {!r:s}, {:s}'.format(file_path, type(err), str(err)))
-            logging.error(''.join(traceback.format_exception(*sys.exc_info())))
-        else:
-            with open(file_path) as f:
-                src_lines = f.readlines()
-            out_path = _new_file_path(doc_dir, file_path, makedirs=True)
-            for lineno in reversed(sorted(docstring_map.keys())):
-#                 docstring_lines = docstring_map[lineno][2].split('\n')
-#                 docstring = docstring_map[lineno][2]
-                namespace, _function_name, docstring = docstring_map[lineno]
-                prefix = '    '
-                if namespace != '':
-                    prefix *= 1 + len(namespace.split('.'))
-                docstring = '"""{:s}"""'.format(docstring)
-                docstring_lines = ['{:s}{:s}\n'.format(prefix, aline) for aline in docstring.split('\n')]
-                src_lines = src_lines[:lineno] \
-                    + docstring_lines \
-                    + src_lines[lineno:] 
-            with open(out_path, 'w') as f:
-                for aline in src_lines:
-                    f.write(aline)
 
 def compile_and_exec(filename, *args, **kwargs):
     print('TRACE: compile_and_exec()', filename, args, kwargs)
@@ -272,7 +267,6 @@ USAGE
     root_path = os.path.abspath(os.path.normpath(cli_args.root))
 #     test()
     target_args = cli_args.argstring.split(' ')
-
     ti = compile_and_exec(cli_args.program, *target_args)
     # Output
     print_pretty_format(ti, root_path)
@@ -282,7 +276,7 @@ USAGE
     dump_docstrings(ti)
     if cli_args.write_docstrings:
         insert_docstrings(ti, cli_args.write_docstrings)
-
+    print('TypeInferencer event count:', ti.event_counter)
     print(' CPU time = {:8.3f} (S)'.format(time.time() - start_time))
     print('CPU clock = {:8.3f} (S)'.format(time.clock() - start_clock))
     print('Bye, bye!')
