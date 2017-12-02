@@ -88,12 +88,13 @@ the line number where it should be inserted:
 
 Sadly ``typin`` is not smart enough to write the documentation text for you :-)
 
-There is a CLI interface ``typin/src/typin/typin_cli.py`` to execute arbitrary
-python code using ``compile()`` and ``exec()`` like this (note use of ``--`` and quotes):
+There is a CLI interface ``typin_cli`` that is an entry point to ``typin/src/typin/typin_cli.py``.
+This  executes arbitrary python code using ``compile()`` and ``exec()`` like the following example.
+Note use of ``--`` followed by Python script then the arguments for that script surrounded by quotes:
 
 .. code-block:: console
     
-    $ python typin_cli.py --stubs=stubs/ --write-docstrings=docstrings/ -- 'example.py foo bar baz'
+    $ python typin_cli.py --stubs=stubs/ --write-docstrings=docstrings/ -- example.py 'foo bar baz'
 
 This will ``compile()/exec()`` ``example.py`` with the arguments ``foo bar baz``
 write the stub files (``'.pyi'`` files) to ``stubs/`` and the source code with the docstrings
