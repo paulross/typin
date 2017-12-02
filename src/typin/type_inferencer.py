@@ -55,7 +55,7 @@ class TypeInferencer(object):
     GLOBAL_NAMESPACE = ''
     FALSE_FUNCTION_NAMES = ('<dictcomp>', '<genexpr>', '<listcomp>', '<module>', '<setcomp>')
     DOCSTRING_STYLE_DEFAULT = 'sphinx'
-    DOCSTRING_STYLES_AVAILABLE = ('sphinx',)
+    DOCSTRING_STYLES_AVAILABLE = types.FunctionTypes.DOCSTRING_STYLES_AVAILABLE
     def __init__(self, verbose=0):
         """Constructor, takes no arguments, merely initialises internal state."""
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
@@ -251,7 +251,11 @@ class TypeInferencer(object):
         return fts.docstring(include_returns, style)
 
     def docstring_map(self, file_path, style=DOCSTRING_STYLE_DEFAULT):
-        """Returns a dict of {line_number : (namespace, function_name, docstring), ...} for the file."""
+        """Returns a dict of::
+        
+            {line_number : (namespace, function_name, docstring), ...}
+        
+        For the file."""
         line_docs = {}
         for namespace in self.function_map[file_path]:
             for function_name in self.function_map[file_path][namespace]:

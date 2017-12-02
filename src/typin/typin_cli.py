@@ -52,15 +52,14 @@ def write_all_stub_files(ti, stubs_dir):
                     logging.error(''.join(traceback.format_exception(*sys.exc_info())))
                 stream.write('\n')
 
-def dump_docstrings(ti, stream=sys.stdout, reverse_lines=False):
+def dump_docstrings(ti, style, stream=sys.stdout, reverse_lines=False):
     stream.write(' dump_docstrings '.center(75, '-'))
     stream.write('\n')
     # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
     for file_path in sorted(ti.file_paths()):
         stream.write('File: {:s}\n'.format(file_path))
         try:
-            docstring_map = ti.docstring_map(file_path,
-                                             style=type_inferencer.TypeInferencer.DOCSTRING_STYLE_DEFAULT)
+            docstring_map = ti.docstring_map(file_path, style=style)
         except Exception as err:
             logging.error('Can not write docstring for file "{:s}": {!r:s}, {:s}'.format(file_path, type(err), str(err)))
             logging.error(''.join(traceback.format_exception(*sys.exc_info())))
@@ -82,7 +81,7 @@ def dump_docstrings(ti, stream=sys.stdout, reverse_lines=False):
     stream.write(' END: dump_docstrings '.center(75, '-'))
     stream.write('\n')
 
-def insert_docstrings(ti, doc_dir, style=type_inferencer.TypeInferencer.DOCSTRING_STYLE_DEFAULT):
+def insert_docstrings(ti, doc_dir, style):
     """Writes out source files with documentation strings.
 
     :param ti: The type inferencer.
@@ -242,6 +241,16 @@ USAGE
                          dest="write_docstrings",
                          default="",
                          help="Directory to write source code with docstrings. [default: %(default)s]")
+    parser.add_argument("--docstring-style",
+                         type=str,
+                         dest="docstring_style",
+                         default=type_inferencer.TypeInferencer.DOCSTRING_STYLE_DEFAULT,
+                         help="Style of docstrings, can be: {:s}. [default: %(default)s]".format(
+                            ', '.join(
+                                ['\'{:s}\''.format(v) for v in type_inferencer.TypeInferencer.DOCSTRING_STYLES_AVAILABLE]
+                                )
+                            )
+                        )
     parser.add_argument("-r", "--root",
                          type=str,
                          dest="root",
@@ -271,9 +280,9 @@ USAGE
     dump_type_inferencer(ti)
     if cli_args.stubs:
         write_all_stub_files(ti, cli_args.stubs)
-    dump_docstrings(ti)
+    dump_docstrings(ti, cli_args.docstring_style)
     if cli_args.write_docstrings:
-        insert_docstrings(ti, cli_args.write_docstrings)
+        insert_docstrings(ti, cli_args.write_docstrings, cli_args.docstring_style)
     print('TypeInferencer event count:', ti.event_counter)
     print(' CPU time = {:8.3f} (S)'.format(time.time() - start_time))
     print('CPU clock = {:8.3f} (S)'.format(time.clock() - start_clock))

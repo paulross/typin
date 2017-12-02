@@ -204,6 +204,13 @@ def test_inspect_ArgInfo():
     assert hasattr(arg_info, 'keywords')
     assert hasattr(arg_info, 'locals')
 
+def test_inspect_ArgInfo_fields():
+    """Check that the version of the inspect module behaves as we expect."""
+    frame = inspect.currentframe()
+    arg_info = inspect.getargvalues(frame)
+    for f in ArgInfo._fields:
+        assert hasattr(arg_info, f)
+
 def test_FunctionTypes_ctor():
     types.FunctionTypes()
 
@@ -311,6 +318,71 @@ def test_FunctionTypes_add_call_add_exception():
     assert fts.exception_type_strings == {102: {'ValueError'}}
     assert fts.stub_file_str() == '(i: int) -> int: ...'
 
+def test_FunctionTypes_has_self_first_arg_True():
+    class MyClass:
+        pass
+    fts = types.FunctionTypes()
+    ai = ArgInfo(['self'], None, None, {'self' : MyClass()})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    assert fts.has_self_first_arg() == True
+
+def test_FunctionTypes_has_self_first_arg_False():
+    fts = types.FunctionTypes()
+    ai = ArgInfo(['i'], None, None, {'i' : 42})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    assert fts.has_self_first_arg() == False
+
+def test_FunctionTypes_types_of_self_single_class():
+    class MyClass:
+        pass
+    fts = types.FunctionTypes()
+    ai = ArgInfo(['self'], None, None, {'self' : MyClass()})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    expected = set([
+        'tests.unit.test_types.test_FunctionTypes_types_of_self_single_class.<locals>.MyClass',
+    ])
+    assert fts.types_of_self() == expected
+
+def test_FunctionTypes_types_of_self_derived_classes():
+    class MyBase:
+        pass
+    
+    class MyClassA(MyBase):
+        pass
+    
+    class MyClassB(MyBase):
+        pass
+    
+    fts = types.FunctionTypes()
+    ai = ArgInfo(['self'], None, None, {'self' : MyClassA()})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    ai = ArgInfo(['self'], None, None, {'self' : MyClassB()})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    expected = set([
+        'tests.unit.test_types.test_FunctionTypes_types_of_self_derived_classes.<locals>.MyClassA',
+        'tests.unit.test_types.test_FunctionTypes_types_of_self_derived_classes.<locals>.MyClassB',
+    ])
+    assert fts.types_of_self() == expected
+
+def test_FunctionTypes_filtered_arguments():
+    class MyClass:
+        def func(self, a, b):
+            pass
+    fts = types.FunctionTypes()
+    ai = ArgInfo(
+        ['self', 'a', 'b'],
+        None,
+        None,
+        {
+            'self'  : MyClass(),
+            'a'     : 42,
+            'b'     : 'Hi there',
+        }
+    )
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    expected = collections.OrderedDict([('a', {'int'}), ('b', {'str'})])
+    assert fts.filtered_arguments() == expected
+
 #---- docstring tests
 def test_FunctionTypes_docstring_sphinx_simple():
     fts = types.FunctionTypes()
@@ -334,10 +406,9 @@ def test_FunctionTypes_docstring_sphinx_simple():
 :returns: ``int`` -- <insert documentation for return values>
 \"\"\""""
     )
-    assert fts.docstring('sphinx') == expected
+    assert fts.docstring(include_returns=True, style='sphinx') == expected
 
-@pytest.mark.xfail(reason='google style not yet supported')
-def test_FunctionTypes_docstring_google_simple():
+def test_FunctionTypes_docstring_sphinx_simple_no_return():
     fts = types.FunctionTypes()
     # Simulate:
     # def function(i):
@@ -346,6 +417,156 @@ def test_FunctionTypes_docstring_google_simple():
     fts.add_call(ai, '/foo/bar/baz.py', 100)
     # (return_value, line_number)
     fts.add_return(84, 101)
-    assert fts.docstring('google') == ''
+#     print()
+#     print(fts.docstring('sphinx'))
+    expected = (
+        100,
+        """\"\"\"
+<insert documentation for function>
+
+:param i: <insert documentation for argument>
+:type i: ``int``
+\"\"\""""
+    )
+    assert fts.docstring(include_returns=False, style='sphinx') == expected
+
+def test_FunctionTypes_docstring_sphinx_example():
+    # See: https://pythonhosted.org/an_example_pypi_project/sphinx.html
+    # "def public_fn_with_sphinxy_docstring(name, state=None):"
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def public_fn_with_sphinxy_docstring(name, state=None):
+    #    # Might raise AttributeError, KeyError
+    #    return 42
+    # Fields: args, varargs, keywords, locals
+    ai = ArgInfo(['name', 'state'], None, None, {'name' : 'me', 'state' : True})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    fts.add_exception(AttributeError(), 104)
+    fts.add_exception(KeyError(), 106)
+    # (return_value, line_number)
+    fts.add_return(42, 110)
+#     print()
+#     print(fts.docstring(include_returns=True, style='sphinx')[0])
+#     print(fts.docstring(include_returns=True, style='sphinx')[1])
+    expected = (
+        100,
+        """\"\"\"
+<insert documentation for function>
+
+:param name: <insert documentation for argument>
+:type name: ``str``
+
+:param state: <insert documentation for argument>
+:type state: ``bool``
+
+:returns: ``int`` -- <insert documentation for return values>
+
+:raises: ``AttributeError, KeyError``
+\"\"\""""
+    )
+    assert fts.docstring(include_returns=True, style='sphinx') == expected
+
+def test_FunctionTypes_docstring_sphinx_example_no_returns():
+    # See: https://pythonhosted.org/an_example_pypi_project/sphinx.html
+    # "def public_fn_with_sphinxy_docstring(name, state=None):"
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def public_fn_with_sphinxy_docstring(name, state=None):
+    #    # Might raise AttributeError, KeyError
+    #    return 42
+    # Fields: args, varargs, keywords, locals
+    ai = ArgInfo(['name', 'state'], None, None, {'name' : 'me', 'state' : True})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    fts.add_exception(AttributeError(), 104)
+    fts.add_exception(KeyError(), 106)
+    # (return_value, line_number)
+    fts.add_return(42, 110)
+#     print()
+#     print(fts.docstring(include_returns=False, style='sphinx')[0])
+#     print(fts.docstring(include_returns=False, style='sphinx')[1])
+    expected = (
+        100,
+        """\"\"\"
+<insert documentation for function>
+
+:param name: <insert documentation for argument>
+:type name: ``str``
+
+:param state: <insert documentation for argument>
+:type state: ``bool``
+
+:raises: ``AttributeError, KeyError``
+\"\"\""""
+    )
+    assert fts.docstring(include_returns=False, style='sphinx') == expected
+
+def test_FunctionTypes_docstring_google_example():
+    # See: https://pythonhosted.org/an_example_pypi_project/sphinx.html
+    # "def public_fn_with_googley_docstring(name, state=None):"
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def public_fn_with_googley_docstring(name, state=None):
+    #    # Might raise AttributeError, KeyError
+    #    return 42
+    # Fields: args, varargs, keywords, locals
+    ai = ArgInfo(['name', 'state'], None, None, {'name' : 'me', 'state' : True})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    fts.add_exception(AttributeError(), 104)
+    fts.add_exception(KeyError(), 106)
+    # (return_value, line_number)
+    fts.add_return(42, 110)
+#     print()
+#     print(fts.docstring(include_returns=True, style='google')[0])
+#     print(fts.docstring(include_returns=True, style='google')[1])
+    expected = (
+        100,
+        """\"\"\"
+<insert documentation for function>
+
+Args:
+    name (str): <insert documentation for argument>
+    state (bool): <insert documentation for argument>
+
+Returns:
+    int. <insert documentation for return values>
+
+Raises:
+    AttributeError, KeyError
+\"\"\""""
+    )
+    assert fts.docstring(include_returns=True, style='google') == expected
+
+def test_FunctionTypes_docstring_google_example_no_returns():
+    # See: https://pythonhosted.org/an_example_pypi_project/sphinx.html
+    # "def public_fn_with_googley_docstring(name, state=None):"
+    fts = types.FunctionTypes()
+    # Simulate:
+    # def public_fn_with_googley_docstring(name, state=None):
+    #    # Might raise AttributeError, KeyError
+    #    return 42
+    # Fields: args, varargs, keywords, locals
+    ai = ArgInfo(['name', 'state'], None, None, {'name' : 'me', 'state' : True})
+    fts.add_call(ai, '/foo/bar/baz.py', 100)
+    fts.add_exception(AttributeError(), 104)
+    fts.add_exception(KeyError(), 106)
+    # (return_value, line_number)
+    fts.add_return(42, 110)
+#     print()
+#     print(fts.docstring(include_returns=True, style='google')[0])
+#     print(fts.docstring(include_returns=True, style='google')[1])
+    expected = (
+        100,
+        """\"\"\"
+<insert documentation for function>
+
+Args:
+    name (str): <insert documentation for argument>
+    state (bool): <insert documentation for argument>
+
+Raises:
+    AttributeError, KeyError
+\"\"\""""
+    )
+    assert fts.docstring(include_returns=False, style='google') == expected
 
 #---- END: docstring tests

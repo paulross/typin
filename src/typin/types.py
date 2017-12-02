@@ -148,6 +148,8 @@ class FunctionTypes:
         'NoneType' : 'None',
     }
     SELF = 'self'
+    # Alphabetical order
+    DOCSTRING_STYLES_AVAILABLE = tuple(sorted(('sphinx', 'google')))
     def __init__(self, signature=None):
         """Constructor, takes no arguments, merely initialises internal state."""
         super().__init__()
@@ -182,6 +184,12 @@ class FunctionTypes:
         self.max_line_number = 0
         # TODO: Track call/return type pairs so we can use the @overload
         # decorator in the .pyi files.
+        self.DOCSTRING_STYLE_FUNCTIONS = {
+                'sphinx' : self._docstring_sphinx,
+                'google' : self._docstring_google,
+        }
+        keys = tuple(sorted(self.DOCSTRING_STYLE_FUNCTIONS.keys()))
+        assert keys == self.DOCSTRING_STYLES_AVAILABLE
 
     def __repr__(self):
         """Dump of the internal representation."""
@@ -249,6 +257,8 @@ class FunctionTypes:
             raise FunctionTypesExceptionNoData()
         return self.min_line_number, self.max_line_number
 
+#---- Data acquisition. ----
+
     def add_call(self, arg_info, file_path, line_number):
         """Adds a function call from the frame."""
         # arg_info is an ArgInfo object which is a named tuple from
@@ -311,6 +321,30 @@ class FunctionTypes:
         # Generators have a call site at declaration and each yield statement
         self.min_line_number = min(self.min_line_number, line_number)
         self.max_line_number = max(self.max_line_number, line_number)
+
+#---- END: Data acquisition. ----
+
+    def has_self_first_arg(self):
+        """Returns True if 'self' is the first argument i.e. I am a method."""
+        arg_types = self.argument_type_strings
+        return len(arg_types.keys()) > 0 and list(arg_types.keys())[0] == self.SELF
+    
+    def types_of_self(self):
+        """Returns the set of types (as strings) as seen for the type of 'self'.
+        Returns None if 'self' is not the first argument i.e. I am not a method.
+        """
+        arg_types = self.argument_type_strings
+        if len(arg_types.keys()) > 0 and list(arg_types.keys())[0] == self.SELF:
+            return arg_types[self.SELF]
+
+    def filtered_arguments(self):
+        """A ``collections.OrderedDict`` of
+        ``{argument_name : set(types, ...), ...}`` where the types are strings.
+        This removes the 'self' argument if it is the first argument."""
+        arg_types = self.argument_type_strings
+        if len(arg_types.keys()) > 0 and list(arg_types.keys())[0] == self.SELF:
+            del arg_types[self.SELF]
+        return arg_types
 
     def __str__(self):
         """Returns something like the annotation string."""
@@ -393,15 +427,21 @@ class FunctionTypes:
         return '<insert documentation for {:s}>'.format(suffix)
 
     def _docstring_sphinx(self, include_returns):
+        """Returns as string that is the function documentation in the Sphinx
+        style. If include_returns is True then the return value documentation
+        is included. If false it is excluded, this is used for functions that
+        have no return value, __init__() for example.
+        
+        Example: https://pythonhosted.org/an_example_pypi_project/sphinx.html
+        "def public_fn_with_sphinxy_docstring(name, state=None):"
+        
+        :param include_returns: Whether to include documentation of the return
+            value.
+        :type include_returns: ``bool``
+        """
         str_l = ['"""']
         str_l.append(self._insert_doc_marker('function'))
-#         str_l.append('')
-        arg_types = self.argument_type_strings
-        # Arguments, optional
-        for i, (arg, types) in enumerate(arg_types.items()):
-            if i == 0 and arg == self.SELF:
-                # Skip the self argument
-                continue
+        for arg, types in self.filtered_arguments().items():
             str_l.append('')
             str_l.append(':param {:s}: {:s}'.format(
                 arg,
@@ -434,10 +474,60 @@ class FunctionTypes:
             str_l.append(':raises: ``{:s}``'.format(', '.join(sorted(excepts))))
         str_l.append('"""')
         return '\n'.join(str_l)
-
-#     def _docstring_google(self):
-#         str_l = []
-#         return '\n'.join(str_l)
+    
+    def _docstring_google(self, include_returns):
+        """Returns as string that is the function documentation in the Google
+        style. If include_returns is True then the return value documentation
+        is included. If false it is excluded, this is used for functions that
+        have no return value, __init__() for example.
+        
+        Example: https://pythonhosted.org/an_example_pypi_project/sphinx.html
+        "def public_fn_with_googley_docstring(name, state=None):"
+        
+        :param include_returns: Whether to include documentation of the return
+            value.
+        :type include_returns: ``bool``
+        """
+        str_l = ['"""']
+        str_l.append(self._insert_doc_marker('function'))
+        args_types = self.filtered_arguments()
+        if len(args_types) > 0:
+            str_l.append('')
+            str_l.append('Args:')
+            for arg, types in args_types.items():
+                str_l.append('    {:s} ({:s}): {:s}'.format(
+                    arg,
+                    ', '.join(sorted(types)),
+                    self._insert_doc_marker('argument'))
+                )
+        if include_returns:
+            str_l.append('')
+            str_l.append('Returns:')
+            # Returns
+            return_types = set()
+            for set_returns in self.return_type_strings.values():
+                return_types |= set_returns
+            # :returns:  int -- the return code.
+            str_return_types = ','.join(sorted(return_types))
+            if str_return_types == 'NoneType':
+                str_l.append('    {:s}'.format(str_return_types))
+            else:
+                str_l.append(
+                    '    {:s}. {:s}'.format(
+                        str_return_types,
+                        self._insert_doc_marker('return values'),
+                    )
+                )
+        # Exceptions, optional
+        if len(self._exception_types) > 0:
+            str_l.append('')
+            str_l.append('Raises:')
+            excepts = set()
+            for e in self.exception_type_strings.values():
+                excepts |= e
+            str_l.append('    {:s}'.format(', '.join(sorted(excepts))))
+        str_l.append('"""')
+        return '\n'.join(str_l)
 
     def docstring(self, include_returns, style='sphinx'):
         """Returns a pair (line_number, docstring) for this function. The
@@ -447,9 +537,24 @@ class FunctionTypes:
 
             src[:line_number] + docstring.split('\\n') + src[line_number:]
 
-        style can be 'sphinx' or"""
-        despatch = {
-            'sphinx' : self._docstring_sphinx,
+        style can be: 'sphinx', 'google'."""
+#         despatch = {
+#             'sphinx' : self._docstring_sphinx,
 #             'google' : self._docstring_google,
-        }
-        return self.line_decl, despatch[style](include_returns)
+#         }
+#         if style not in despatch:
+#             raise ValueError(
+#                 'Style {:s} not supported, must be one of {!r:s}'.format(
+#                     style,
+#                     list(despatch.keys())
+#                 )
+#             )
+#         return self.line_decl, despatch[style](include_returns)
+        if style not in self.DOCSTRING_STYLE_FUNCTIONS:
+            raise ValueError(
+                'Style {:s} not supported, must be one of {!r:s}'.format(
+                    style,
+                    list(self.DOCSTRING_STYLE_FUNCTIONS.keys())
+                )
+            )
+        return self.line_decl, self.DOCSTRING_STYLE_FUNCTIONS[style](include_returns)
