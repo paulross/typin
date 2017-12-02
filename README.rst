@@ -18,7 +18,7 @@ Example
 
 Lets say you have a function that creates a repeated string, like this:
 
-.. code_block:: python
+.. code-block:: python
 
     def function(s, num):
         if num < 1:
