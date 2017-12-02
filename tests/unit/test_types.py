@@ -246,12 +246,12 @@ def test_FunctionTypes_called_never_returned_docstring():
     exp = (
         100,
         """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param i: <insert documentation for argument>
+:param i: <insert_documentation_for_argument>
 :type i: ``int``
 
-:returns: ```` -- <insert documentation for return values>
+:returns: ```` -- <insert_documentation_for_return_values>
 \"\"\"""")
     assert fts.docstring(include_returns=True) == exp
 
@@ -398,12 +398,12 @@ def test_FunctionTypes_docstring_sphinx_simple():
     expected = (
         100,
         """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param i: <insert documentation for argument>
+:param i: <insert_documentation_for_argument>
 :type i: ``int``
 
-:returns: ``int`` -- <insert documentation for return values>
+:returns: ``int`` -- <insert_documentation_for_return_values>
 \"\"\""""
     )
     assert fts.docstring(include_returns=True, style='sphinx') == expected
@@ -422,9 +422,9 @@ def test_FunctionTypes_docstring_sphinx_simple_no_return():
     expected = (
         100,
         """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param i: <insert documentation for argument>
+:param i: <insert_documentation_for_argument>
 :type i: ``int``
 \"\"\""""
     )
@@ -451,15 +451,15 @@ def test_FunctionTypes_docstring_sphinx_example():
     expected = (
         100,
         """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param name: <insert documentation for argument>
+:param name: <insert_documentation_for_argument>
 :type name: ``str``
 
-:param state: <insert documentation for argument>
+:param state: <insert_documentation_for_argument>
 :type state: ``bool``
 
-:returns: ``int`` -- <insert documentation for return values>
+:returns: ``int`` -- <insert_documentation_for_return_values>
 
 :raises: ``AttributeError, KeyError``
 \"\"\""""
@@ -487,12 +487,12 @@ def test_FunctionTypes_docstring_sphinx_example_no_returns():
     expected = (
         100,
         """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param name: <insert documentation for argument>
+:param name: <insert_documentation_for_argument>
 :type name: ``str``
 
-:param state: <insert documentation for argument>
+:param state: <insert_documentation_for_argument>
 :type state: ``bool``
 
 :raises: ``AttributeError, KeyError``
@@ -521,14 +521,14 @@ def test_FunctionTypes_docstring_google_example():
     expected = (
         100,
         """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
 Args:
-    name (str): <insert documentation for argument>
-    state (bool): <insert documentation for argument>
+    name (str): <insert_documentation_for_argument>
+    state (bool): <insert_documentation_for_argument>
 
 Returns:
-    int. <insert documentation for return values>
+    int. <insert_documentation_for_return_values>
 
 Raises:
     AttributeError, KeyError
@@ -557,11 +557,11 @@ def test_FunctionTypes_docstring_google_example_no_returns():
     expected = (
         100,
         """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
 Args:
-    name (str): <insert documentation for argument>
-    state (bool): <insert documentation for argument>
+    name (str): <insert_documentation_for_argument>
+    state (bool): <insert_documentation_for_argument>
 
 Raises:
     AttributeError, KeyError

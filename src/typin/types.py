@@ -424,7 +424,7 @@ class FunctionTypes:
         return ''.join(sl)
 
     def _insert_doc_marker(self, suffix):
-        return '<insert documentation for {:s}>'.format(suffix)
+        return '<insert documentation for {:s}>'.format(suffix).replace(' ', '_')
 
     def _docstring_sphinx(self, include_returns):
         """Returns as string that is the function documentation in the Sphinx

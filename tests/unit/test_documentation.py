@@ -57,15 +57,15 @@ def test_function_annotation():
 #     print()
 #     print(docstring)
     expected_docstring = """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param s: <insert documentation for argument>
+:param s: <insert_documentation_for_argument>
 :type s: ``str``
 
-:param num: <insert documentation for argument>
+:param num: <insert_documentation_for_argument>
 :type num: ``int``
 
-:returns: ``str`` -- <insert documentation for return values>
+:returns: ``str`` -- <insert_documentation_for_return_values>
 
 :raises: ``ValueError``
 \"\"\""""
@@ -89,15 +89,15 @@ def test_function_raises_no_see_return():
 #     print()
 #     print(docstring)
     expected_docstring = """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param s: <insert documentation for argument>
+:param s: <insert_documentation_for_argument>
 :type s: ``int, str``
 
-:param num: <insert documentation for argument>
+:param num: <insert_documentation_for_argument>
 :type num: ``int, str``
 
-:returns: ```` -- <insert documentation for return values>
+:returns: ```` -- <insert_documentation_for_return_values>
 
 :raises: ``TypeError, ValueError``
 \"\"\""""
@@ -123,15 +123,15 @@ def test_function_raises_does_see_return():
 #     print()
 #     print(docstring)
     expected_docstring = """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param s: <insert documentation for argument>
+:param s: <insert_documentation_for_argument>
 :type s: ``int, str``
 
-:param num: <insert documentation for argument>
+:param num: <insert_documentation_for_argument>
 :type num: ``int, str``
 
-:returns: ``str`` -- <insert documentation for return values>
+:returns: ``str`` -- <insert_documentation_for_return_values>
 
 :raises: ``TypeError, ValueError``
 \"\"\""""
@@ -153,12 +153,12 @@ def test_simple_class_docstring___init__():
 #     print()
 #     print(docstring)
     expected_docstring = """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param first_name: <insert documentation for argument>
+:param first_name: <insert_documentation_for_argument>
 :type first_name: ``str``
 
-:param last_name: <insert documentation for argument>
+:param last_name: <insert_documentation_for_argument>
 :type last_name: ``str``
 \"\"\""""
     assert docstring == expected_docstring
@@ -179,9 +179,9 @@ def test_simple_class_docstring_name():
 #     print()
 #     print(docstring)
     expected_docstring = """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:returns: ``str`` -- <insert documentation for return values>
+:returns: ``str`` -- <insert_documentation_for_return_values>
 \"\"\""""
     assert docstring == expected_docstring
 
@@ -216,15 +216,15 @@ def test_docstring_with_function_that_always_raises_docstring():
 #     print()
 #     print(docstring)
     expected_docstring = """\"\"\"
-<insert documentation for function>
+<insert_documentation_for_function>
 
-:param s: <insert documentation for argument>
+:param s: <insert_documentation_for_argument>
 :type s: ``str``
 
-:param num: <insert documentation for argument>
+:param num: <insert_documentation_for_argument>
 :type num: ``int``
 
-:returns: ```` -- <insert documentation for return values>
+:returns: ```` -- <insert_documentation_for_return_values>
 
 :raises: ``ValueError``
 \"\"\""""
