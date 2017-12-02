@@ -29,7 +29,9 @@ Lets say you have a function that creates a repeated string, like this:
             num -= 1
         return ' '.join(lst)
 
-You can exercise this under the watchful gaze of ``typin``::
+You can exercise this under the watchful gaze of ``typin``:
+
+.. code-block:: python
 
     from typin import type_inferencer
 
@@ -37,12 +39,16 @@ You can exercise this under the watchful gaze of ``typin``::
         assert function('Hi', 2) == 'Hi Hi'
 
 You can then get the types that ``typin`` has observed as a string suitable for
-a stub file::
+a stub file:
+
+.. code-block:: python
 
     ti.stub_file_str(__file__, '', 'function')
     # returns: 'def function(s: str, num: int) -> str: ...'
 
-Then adding code that provokes the exception we can track that as well::
+Then adding code that provokes the exception we can track that as well:
+
+.. code-block:: python
 
     from typin import type_inferencer
 
@@ -55,7 +61,9 @@ Then adding code that provokes the exception we can track that as well::
 
 Exception specifications are not part of Python's type annotation but they are
 part of of the Sphinx documentation string standard and ``typin`` can provide that, and
-the line number where it should be inserted::
+the line number where it should be inserted:
+
+.. code-block:: python
 
     line_number, docstring = ti.docstring(__file__, '', 'function', style='sphinx')
     docstring
@@ -81,9 +89,11 @@ the line number where it should be inserted::
 Sadly ``typin`` is not smart enough to write the documentation text for you :-)
 
 There is a CLI interface ``typin/src/typin/typin_cli.py`` to execute arbitrary
-python code using ``compile()`` and ``exec()`` like this::
+python code using ``compile()`` and ``exec()`` like this:
+
+.. code-block:: console
     
-    python typin_cli.py --stubs=stubs/ --write-docstrings=docstrings/ -- example.py 'foo bar baz'
+    $ python typin_cli.py --stubs=stubs/ --write-docstrings=docstrings/ -- example.py 'foo bar baz'
 
 This will ``compile()/exec()`` ``example.py`` with the arguments ``foo bar baz``
 write the stub files (``'.pyi'`` files) to ``stubs/`` and the source code with the docstrings
