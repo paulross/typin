@@ -2,6 +2,12 @@
 Created on 22 Jun 2017
 
 @author: paulross
+
+WARNING: Declaring multiple classes of the same name in different functions
+might mess up the finding of bases due the garbage collector not releasing
+previous definitions.
+Earlier multiple class A definitions ware causing a
+subtle problem in this regard. See test_class_multiple_inheritance_unsorted().
 '''
 import collections # To test problematic named tuple
 import base64 # Just used as an example of stdlib usage
@@ -827,8 +833,9 @@ class IllegalMonthError(ValueError):
         '    def __init__(self, month: int) -> None: ...',
         '    def __str__(self) -> str: ...',
     ]
-#     print()
-#     print(ti.pretty_format(__file__))
+    print()
+    print(ti.pretty_format(__file__))
+    print(ti.class_bases)
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
 def test_class_multiple_inheritance_unsorted():
@@ -836,22 +843,20 @@ def test_class_multiple_inheritance_unsorted():
     class X: pass
     class Y: pass
     class Z: pass
-    class A(Z, X, Y):
-#         def __init__(self, month):
-#             super().__init__()
+    class AZXY(Z, X, Y):
         def __str__(self):
             return ''
 
     with type_inferencer.TypeInferencer() as ti:
-        obj = A()
-        str(obj)
+        obj = AZXY()
+        assert str(obj) == ''
     expected = [
-        'class A(Z, X, Y):',
-        '    def __init__(self, month: int) -> None: ...',
+        'class AZXY(Z, X, Y):',
         '    def __str__(self) -> str: ...',
     ]
-    print()
-    print(ti.pretty_format(__file__))
+#     print()
+#     print(ti.pretty_format(__file__))
+#     print(ti.class_bases)
     assert ti.pretty_format(__file__) == '\n'.join(expected)
 
 # Used for line number and ranges
@@ -1207,10 +1212,9 @@ def test_named_tuple():
         print(dir(MyNT.__new__))
         print(locals())
         print(nt._fields)
-
     expected = [
-        'class A:',
-        '    def get(self) -> int: ...',
+        'class TypeInferencer:',
+        '    def __exit__(self, exc_type: None, exc_value: None, traceback: None) -> None: ...',
     ]
     print()
 #     pprint.pprint(ti.function_map)
