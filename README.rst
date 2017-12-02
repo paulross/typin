@@ -16,7 +16,9 @@ annotations and documentation strings.
 Example
 --------
 
-Lets say you have a function that creates a repeated string, like this::
+Lets say you have a function that creates a repeated string, like this:
+
+.. code_block:: python
 
     def function(s, num):
         if num < 1:
