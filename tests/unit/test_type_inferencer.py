@@ -1356,6 +1356,76 @@ def test_generator_in_generator_that_raises():
     fts = ti.function_types(__file__, '', 'gen_outer')
     assert fts.exception_type_strings == {}
 
+def test_find_docstring_insertion_line_number_simple():
+    src = """# Line 1
+# Line 2
+def foo(): # Line 3 <---
+
+"""
+    src_lines = src.split('\n')
+    ti = type_inferencer.TypeInferencer()
+    assert ti.find_docstring_insertion_line_number('foo', src_lines, 3) == 3
+
+def test_find_docstring_insertion_line_number_properties():
+    src = """# Line 1
+# Line 2
+@foo # Line 3
+@bar # Line 4
+def foo(): # Line 5 <---
+
+"""
+    src_lines = src.split('\n')
+    ti = type_inferencer.TypeInferencer()
+    assert ti.find_docstring_insertion_line_number('foo', src_lines, 3) == 5
+
+def test_find_docstring_insertion_line_number_lambda():
+    src = """# Line 1
+# Line 2
+lambda x, y: x + y # Line 3
+
+"""
+    src_lines = src.split('\n')
+    ti = type_inferencer.TypeInferencer()
+    assert ti.find_docstring_insertion_line_number('foo', src_lines, 3) == 0
+
+def test_find_docstring_insertion_line_number_multi_line():
+    src = """# Line 1
+# Line 2
+def foo(a, # Line 3
+        b, # Line 4
+        c): # Line 5 <---
+
+"""
+    src_lines = src.split('\n')
+    ti = type_inferencer.TypeInferencer()
+    assert ti.find_docstring_insertion_line_number('foo', src_lines, 3) == 5
+
+def test_find_docstring_insertion_line_number_multi_line_alt():
+    src = """# Line 1
+# Line 2
+def foo(a, # Line 3
+        b, # Line 4
+        c, # Line 5
+        ): # Line 6 <---
+
+"""
+    src_lines = src.split('\n')
+    ti = type_inferencer.TypeInferencer()
+    assert ti.find_docstring_insertion_line_number('foo', src_lines, 3) == 6
+
+def test_find_docstring_insertion_line_number_multi_line_overrun():
+    src = """# Line 1
+# Line 2
+def foo(a, # Line 3
+        b, # Line 4
+        c, # Line 5, missing close function declaration
+
+"""
+    src_lines = src.split('\n')
+    ti = type_inferencer.TypeInferencer()
+    with pytest.raises(IndexError):
+        ti.find_docstring_insertion_line_number('foo', src_lines, 3)
+
 def test_insert_docstrings_simple_function():
     start_lineno = inspect.currentframe().f_lineno + 1
     def func_single_arg_return_arg(arg):

@@ -662,14 +662,56 @@ class TypeInferencer(object):
         # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())
         self._cleanup()
+        
+    def find_docstring_insertion_line_number(self, file_path, src_lines, lineno):
+        """Finds the insertion point for the docstring. If the result of this
+        is non-zero then the caller can insert the documentation lines thus::
+        
+            src_lines = src_lines[:lineno] + docstring_lines + src_lines[lineno:]
+        
+        :param file_path: Path to the source file, this is only used for any
+            warning message.
+        :type file_path: ``str``
 
+        :param src_lines: List of lines of source code.
+        :type src_lines: ``list([str])``
+
+        :param lineno: Line number starting at 1. This is NOT the index into
+            src_lines, lineno-1 is the index.
+        :type lineno: ``int``
+        
+        :raises: ``IndexError`` On out of bounds.
+
+        :return: ``int`` -- The source code line number starting at 1.
+            Returns 0 on failure, typically a lambda that can not be documented.
+            If so a warning message is emitted and the caller can ignore the
+            insertion.
+        """
+        # With decorators the lineno is the line of the decorator, not the function.
+        while RE_DECORATOR.match(src_lines[lineno - 1]):
+            lineno += 1
+        if RE_FUNCTION.match(src_lines[lineno - 1]) is None:
+            # Example: members.sort(key=lambda t: (t[1], t[0]))
+            # lambda seen as function
+            logging.warning(
+                'insert_docstrings(): file {:s}{:d} source line "{:s}" is not a function'.format(
+                    file_path, lineno, src_lines[lineno - 1].rstrip()
+            ))
+            return 0
+        else:
+            while '):' not in src_lines[lineno - 1]:
+                # Arguments written over multiple lines
+                lineno += 1
+        return lineno
+    
     def insert_docstrings(self, file_path, src_lines=None, style=DOCSTRING_STYLE_DEFAULT):
         """Injects the documentation strings into lines of source code.
 
         :param file_path: Path to the source file.
         :type file_path: ``str``
 
-        :param src_lines: List of source lines, if None (default) then file_path will be read.
+        :param src_lines: List of lines of source code, if None (default) then
+            file_path will be read using readlines().
         :type src_lines: ``list([str]),NoneType``
 
         :param style: Docstring style.
@@ -688,21 +730,14 @@ class TypeInferencer(object):
             if namespace != '':
                 prefix *= 1 + len(namespace.split('.'))
             # docstring = '"""{:s}"""'.format(docstring)
-            docstring_lines = ['{:s}{:s}\n'.format(prefix, aline) for aline in docstring.split('\n')]
-            # With decorators the lineno is the line of the decorator, not the function.
-            while RE_DECORATOR.match(src_lines[lineno - 1]):
-                lineno += 1
-            if RE_FUNCTION.match(src_lines[lineno - 1]) is None:
-                # Example: members.sort(key=lambda t: (t[1], t[0]))
-                # lambda seen as function
-                logging.warning(
-                    'insert_docstrings(): file {:s}{:d} source line "{:s}" is not a function'.format(
-                        file_path, lineno, src_lines[lineno - 1].rstrip()
-                ))
-            else:
-                while '):' not in src_lines[lineno - 1]:
-                    # Arguments written over multiple lines
-                    lineno += 1
+            docstring_lines = [
+                '{:s}{:s}\n'.format(prefix, aline) for aline in docstring.split('\n')
+            ]
+            # Adjust the line number for decorators, multi-line declarations.
+            lineno = self.find_docstring_insertion_line_number(
+                file_path, src_lines, lineno
+            )
+            # Ignore lambdas where lineno is 0.
+            if lineno:
                 src_lines = src_lines[:lineno] + docstring_lines + src_lines[lineno:]
         return src_lines
-
