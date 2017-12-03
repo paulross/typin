@@ -51,6 +51,7 @@ def write_all_stub_files(ti, stubs_dir):
                     logging.error('Could not write docstring to {:s}: {!r:s}: {:s}'.format(out_path, type(err), str(err)))
                     logging.error(''.join(traceback.format_exception(*sys.exc_info())))
                 stream.write('\n')
+    print(' DONE: write_all_stub_files() '.center(75, '-'))
 
 def dump_docstrings(ti, style, stream=sys.stdout, reverse_lines=False):
     stream.write(' dump_docstrings '.center(75, '-'))
@@ -92,13 +93,16 @@ def insert_docstrings(ti, doc_dir, style):
 
     :return: ``NoneType``
     """
+    print(' insert_docstrings() '.center(75, '-'))
     # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
     for file_path in sorted(ti.file_paths()):
         out_path = _new_file_path(doc_dir, file_path, makedirs=True)
+        print(out_path)
         src_lines = ti.insert_docstrings(file_path, style=style)
         with open(out_path, 'w') as f:
             for aline in src_lines:
                 f.write(aline)
+    print(' DONE: insert_docstrings() '.center(75, '-'))
 
 def dump_type_inferencer(ti, stream=sys.stdout):
     stream.write(' ti.dump() '.center(75, '-'))
@@ -120,7 +124,9 @@ def print_pretty_format(ti, root_path, stream=sys.stdout):
     stream.write(' END: ti.pretty_format() '.center(75, '-'))
     stream.write('\n')
 
-def compile_and_exec(filename, *args, **kwargs):
+def compile_and_exec(filename, trace_frame_events, events_to_trace, *args, **kwargs):
+    """Main execution point.
+    """
     print('TRACE: compile_and_exec()', filename, args, kwargs)
     sys.argv = [filename] + list(args)
     logging.debug('typein_cli.compile_and_exec({:s})'.format(filename))
@@ -128,7 +134,7 @@ def compile_and_exec(filename, *args, **kwargs):
         src = f_obj.read()
         logging.debug('typein_cli.compile_and_exec() read {:d} lines'.format(src.count('\n')))
         code = compile(src, filename, 'exec')
-        with type_inferencer.TypeInferencer() as ti:
+        with type_inferencer.TypeInferencer(trace_frame_events, events_to_trace or None) as ti:
             try:
                 exec(code, globals())#, locals())
             except SystemExit:
@@ -188,24 +194,6 @@ USAGE
 """ % (program_shortdesc, program_version)
     parser = argparse.ArgumentParser(description=program_license,
                             formatter_class=argparse.RawDescriptionHelpFormatter)
-#     parser.add_argument("-c", action="store_true", dest="plot_conditional", default=False,
-#                       help="Add conditionally included files to the plots. [default: %(default)s]")
-#     parser.add_argument("-d", "--dump", action="append", dest="dump", default=[],
-#                       help="""Dump output, additive. Can be:
-# C - Conditional compilation graph.
-# F - File names encountered and their count.
-# I - Include graph.
-# M - Macro environment.
-# T - Token count.
-# R - Macro dependencies as an input to DOT.
-# [default: %(default)s]""")
-#     parser.add_argument("-g", "--glob", action='append', default=[],
-#             help="Pattern match to use when processing directories. [default: %(default)s] i.e. every file.")
-#     parser.add_argument("--heap", action="store_true", dest="heap", default=False,
-#                       help="Profile memory usage. [default: %(default)s]")
-#     parser.add_argument("-k", "--keep-going", action="store_true",
-#                          dest="keep_going", default=False,
-#                          help="Keep going. [default: %(default)s]")
     parser.add_argument(
             "-l", "--loglevel",
             type=int,
@@ -214,23 +202,14 @@ USAGE
             help="Log Level (debug=10, info=20, warning=30, error=40, critical=50)" \
             " [default: %(default)s]"
         )
-#     parser.add_argument("-o", "--output",
-#                          type=str,
-#                          dest="output",
-#                          default="out",
-#                          help="Output directory. [default: %(default)s]")
-#     parser.add_argument("-p", action="store_true", dest="ignore_pragma", default=False,
-#                       help="Ignore pragma statements. [default: %(default)s]")
-#     parser.add_argument("-r", "--recursive", action="store_true", dest="recursive",
-#                          default=False,
-#                       help="Recursively process directories. [default: %(default)s]")
-#     parser.add_argument("-t", "--dot", action="store_true", dest="include_dot",
-#                          default=False,
-#                       help="""Write an DOT include dependency table and execute DOT
-# on it to create a SVG file. [default: %(default)s]""")
-#     parser.add_argument("-G", action="store_true", dest="gcc_extensions",
-#                          default=False,
-#                       help="""Support GCC extensions. Currently only #include_next. [default: %(default)s]""")
+    parser.add_argument("-d", "--dump", action="store_true", dest="dump",
+                         default=False,
+                      help="Dump results on stdout after processing. [default: %(default)s]")
+    parser.add_argument("-t", "--trace-frame-events", action="store_true", dest="trace_frame_events",
+                        default=False,
+                        help="""Very verbose trace output, one line per frame event. [default: %(default)s]""")
+    parser.add_argument("-e", "--events-to-trace", action='append', default=[], dest="events_to_trace",
+                        help="Events to trace (additive). [default: %(default)s] i.e. every event.")
     parser.add_argument("-s", "--stubs",
                          type=str,
                          dest="stubs",
@@ -274,16 +253,20 @@ USAGE
     root_path = os.path.abspath(os.path.normpath(cli_args.root))
 #     test()
     target_args = cli_args.argstring.split(' ')
-    ti = compile_and_exec(cli_args.program, *target_args)
-    # Output
-    print_pretty_format(ti, root_path)
-    dump_type_inferencer(ti)
+    # Execution point
+    ti = compile_and_exec(cli_args.program, cli_args.trace_frame_events, cli_args.events_to_trace, *target_args)
+    # Output: stubs, docstrings and dump.
     if cli_args.stubs:
         write_all_stub_files(ti, cli_args.stubs)
-    dump_docstrings(ti, cli_args.docstring_style)
     if cli_args.write_docstrings:
         insert_docstrings(ti, cli_args.write_docstrings, cli_args.docstring_style)
-    print('TypeInferencer event count:', ti.event_counter)
+    if cli_args.dump:
+        print_pretty_format(ti, root_path)
+        dump_type_inferencer(ti)
+        dump_docstrings(ti, cli_args.docstring_style)
+    # Summary.
+    print('TypeInferencer total events: {:d}'.format(ti.eventno))
+    print(' TypeInferencer event count:', ti.event_counter)
     print(' CPU time = {:8.3f} (S)'.format(time.time() - start_time))
     print('CPU clock = {:8.3f} (S)'.format(time.clock() - start_clock))
     print('Bye, bye!')

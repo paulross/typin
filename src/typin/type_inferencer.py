@@ -56,8 +56,14 @@ class TypeInferencer(object):
     FALSE_FUNCTION_NAMES = ('<dictcomp>', '<genexpr>', '<listcomp>', '<module>', '<setcomp>')
     DOCSTRING_STYLE_DEFAULT = 'sphinx'
     DOCSTRING_STYLES_AVAILABLE = types.FunctionTypes.DOCSTRING_STYLES_AVAILABLE
-    def __init__(self, verbose=0):
-        """Constructor, takes no arguments, merely initialises internal state."""
+    def __init__(self, trace_frame_event=False, events_to_trace=None):
+        """Constructor, initialises internal state.
+
+        trace_frame_event - Verbose reporting of frame events for trace/debug which can be set
+            dynamically such as from the command line. This reports once for every frame event.
+
+        events_to_trace - List of events to trace, None means all.
+        """
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         self.function_map = {}
         # TODO: Record if the function is a generator/co-routine by observing StopIteration?
@@ -66,8 +72,12 @@ class TypeInferencer(object):
         self.class_bases = {}
         # Allow re-entrancy with sys.settrace(function)
         self._trace_fn_stack = []
-        # Verbose output, unused.
-        self.verbose = verbose
+        # Verbose reporting of frame events for trace/debug which can be set
+        # dynamically such as from the command line.
+        # This reports once for every frame event.
+        self.trace_frame_event = trace_frame_event
+        # List of events to trace, None means all.
+        self.events_to_trace = events_to_trace
         # Deferred evaluation of exceptions to exclude spurious
         # return None events
         # This is a ExceptionInProgress object or None
@@ -76,7 +86,8 @@ class TypeInferencer(object):
         self.eventno = 0
         # Event counters for different events, for the curious
         self.event_counter = collections.Counter()
-        # Used for trace/debug
+        # Used for trace/debug, manually set this when necessary.
+        # This makes multiple reports, see self._trace(), self._debug() etc.
         self._trace_flag = False
 
     def dump(self, stream=sys.stdout):
@@ -252,9 +263,9 @@ class TypeInferencer(object):
 
     def docstring_map(self, file_path, style=DOCSTRING_STYLE_DEFAULT):
         """Returns a dict of::
-        
+
             {line_number : (namespace, function_name, docstring), ...}
-        
+
         For the file."""
         line_docs = {}
         for namespace in self.function_map[file_path]:
@@ -538,16 +549,32 @@ class TypeInferencer(object):
     def __call__(self, frame, event, arg):
         """Handle a trace event."""
         self.event_counter.update({event : 1})
+        # A named tuple: Traceback(filename, lineno, function, code_context, index)
         frame_info = inspect.getframeinfo(frame)
+        if self.trace_frame_event and (self.events_to_trace is None or event in self.events_to_trace):
+            # The tuple contains the filename, the line number of the current line, the function name, a list of lines
+            # of context from the source code, and the index of the current line within that list.
+            # Traceback(filename='.../3.6/lib/python3.6/_sitebuiltins.py', lineno=19, function='__call__',
+            #           code_context=['    def __call__(self, code=None):\n'], index=0)
+            # Or:
+            # Traceback(filename='<string>', lineno=12, function='__new__', code_context=None, index=None)
+            try:
+                repr_arg = repr(arg)
+            except Exception:# AttributeError: # ???
+                repr_arg = 'repr(arg) fails'
+            # Order of columns is an attempt to make this very verbose output readable
+            print('[{:8d}] {:9s} {!r:s}: arg="{:s}"'.format(self.eventno, event, frame_info, repr_arg))
         try:
             self._debug(
                 'TypeInferencer.__call__(): file: {:s}#{:d} function: {:s} event:{:s} arg: {:s}'.format(
                     frame_info.filename,
-                    frame_info.lineno, frame_info.function,
-                    repr(event), repr(arg)
+                    frame_info.lineno,
+                    frame_info.function,
+                    repr(event),
+                    repr(arg)
                 )
             )
-        except Exception:
+        except Exception: # Or just AttributeError ???
             # This can happen when calling __repr__ on partially constructed objects
             # For example with argparse:
             # AttributeError: 'ArgumentParser' object has no attribute 'prog'
@@ -666,13 +693,13 @@ class TypeInferencer(object):
         # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())
         self._cleanup()
-        
+
     def find_docstring_insertion_line_number(self, file_path, src_lines, lineno):
         """Finds the insertion point for the docstring. If the result of this
         is non-zero then the caller can insert the documentation lines thus::
-        
+
             src_lines = src_lines[:lineno] + docstring_lines + src_lines[lineno:]
-        
+
         :param file_path: Path to the source file, this is only used for any
             warning message.
         :type file_path: ``str``
@@ -683,7 +710,7 @@ class TypeInferencer(object):
         :param lineno: Line number starting at 1. This is NOT the index into
             src_lines, lineno-1 is the index.
         :type lineno: ``int``
-        
+
         :raises: ``IndexError`` On out of bounds.
 
         :return: ``int`` -- The source code line number starting at 1.
@@ -707,7 +734,7 @@ class TypeInferencer(object):
                 # Arguments written over multiple lines
                 lineno += 1
         return lineno
-    
+
     def insert_docstrings(self, file_path, src_lines=None, style=DOCSTRING_STYLE_DEFAULT):
         """Injects the documentation strings into lines of source code.
 
