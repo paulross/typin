@@ -24,6 +24,10 @@ class TypeInferencerExceptionConflictingLines(TypeInferencerExceptionBase):
     """Exception thrown when multiple functions appear on same line."""
     pass
 
+class TypeInferencerTypesException(TypeInferencerExceptionBase):
+    """Exception thrown when the types module raises an exception."""
+    pass
+
 RE_DECORATOR = re.compile(r'\s*@(\S+)\s*')
 RE_FUNCTION = re.compile(r'\s*def\s+(\S+)\((.*)')
 RE_METHOD = re.compile(r'\s*def\s+(\S+)\(self(.*)')
@@ -63,6 +67,11 @@ class TypeInferencer(object):
             dynamically such as from the command line. This reports once for every frame event.
 
         events_to_trace - List of events to trace, None means all.
+
+        See also some hard coded trace controls::
+
+            self._trace_flag
+            self._trace_non_tracked_events
         """
         # dict of {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         self.function_map = {}
@@ -89,6 +98,9 @@ class TypeInferencer(object):
         # Used for trace/debug, manually set this when necessary.
         # This makes multiple reports, see self._trace(), self._debug() etc.
         self._trace_flag = False
+        # This adds even more verbose event tracking as it set sys.setprofile(...)
+        # which responds to c_call and c_return events.
+        self._trace_non_tracked_events = False
 
     def dump(self, stream=sys.stdout):
         """Dump the internal representation to a stream."""
@@ -109,7 +121,7 @@ class TypeInferencer(object):
                     )
         stream.write(' END: self.function_map '.center(75, '-'))
         stream.write('\n')
-        stream.write(' self.class_basses '.center(75, '-'))
+        stream.write(' self.class_bases '.center(75, '-'))
         stream.write('\n')
         # dict of {file_path : { namespace : (__bases__, ...), ...}
         for file_path in sorted(self.class_bases.keys()):
@@ -126,7 +138,7 @@ class TypeInferencer(object):
                            self.class_bases[file_path][ns]),
                         )
                         stream.write('\n')
-        stream.write(' END: self.class_basses '.center(75, '-'))
+        stream.write(' END: self.class_bases '.center(75, '-'))
         stream.write('\n')
         stream.write(' END: TypeInferencer.dump() '.center(75, '='))
         stream.write('\n')
@@ -167,13 +179,24 @@ class TypeInferencer(object):
 #         return self.file_paths_filtered(os.getcwd(), relative=relative)
 
     def _pformat_class_line(self, file_path, prefix, class_name_stack):
+        """Pretty format a class with its bases suitable for a stub file. Returns a line.
+
+        :param file_path: File path to access map of
+            ``{ namespace : { function_name : FunctionTypes, ...}``
+        :type file_path: ``str``
+
+        :param prefix: Padding to indent the line.
+        :type prefix: ``str``
+
+        :param class_name_stack: Class namespace list (classes declared in classes).
+            Must have at least one item. The last item is this class's name.
+        :type class_name_stack: ``list[str]``
+
+        :returns: ``str`` -- Pretty formatted line.
+        """
         assert len(class_name_stack) > 0, \
             'Class name stack {!r:s} must have one item.'.format(class_name_stack)
         scoped_name = '.'.join(class_name_stack)
-
-#         print('TRACE self.class_bases:', '.'.join(scoped_name))
-#         pprint.pprint(self.class_bases)
-
         try:
             bases_types = self.class_bases[file_path][scoped_name]
         except KeyError:
@@ -194,6 +217,22 @@ class TypeInferencer(object):
         return '{:s}class {:s}{:s}:'.format(prefix, class_name_stack[-1], base_str)
 
     def _pformat_file(self, file_path, add_line_number_as_comment):
+        """
+        Pretty format all the known classes and functions in the particular file.
+        Returns a list of lines.
+
+        This uses types.FunctionTypes.stub_file_str() for each function.
+
+        :param file_path: File path to access map of
+            ``{ namespace : { function_name : FunctionTypes, ...}``
+        :type file_path: ``str``
+
+        :param add_line_number_as_comment: Flag to add the line number as a suffix. For example:
+            ``def category(unit: bytes) -> bytes: ...#688``
+        :type add_line_number_as_comment: ``bool``
+
+        :returns: ``list[str]`` -- List of pretty formatted lines.
+        """
         # file_map is { namespace : { function_name : FunctionTypes, ...}
         file_map = self.function_map[file_path]
 #         pprint.pprint(file_map)
@@ -227,18 +266,45 @@ class TypeInferencer(object):
                 prefix += self.INDENT
             for function_name in sorted(file_map[namespace]):
                 fts = file_map[namespace][function_name]
-                str_list.append('{:s}def {:s}{:s}'.format(
-                    prefix,
-                    function_name,
-                    fts.stub_file_str()
+                try:
+                    str_list.append('{:s}def {:s}{:s}'.format(
+                        prefix,
+                        function_name,
+                        fts.stub_file_str()
+                        )
                     )
-                )
-                if add_line_number_as_comment:
-                    str_list[-1] = str_list[-1] + '#{:d}'.format(fts.line_range[0])
+                except types.TypesExceptionBase as err:
+                    logging.error(
+                        'Could not get stub_file_str, namespace: {:s}, function: {:s}, error: {!r:s}: {:s}'.format(
+                            namespace, function_name, type(err), str(err))
+                    )
+                    logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+                else:
+                    if add_line_number_as_comment:
+                        try:
+                            lineno = fts.line_range[0]
+                        except types.FunctionTypesExceptionNoData:
+                            lineno = -1
+                        str_list[-1] = str_list[-1] + '#{:d}'.format(lineno)
         return str_list
 
     def pretty_format(self, file=None, add_line_number_as_comment=False):
-        """Returns a pretty formatted string."""
+        """
+        Returns a pretty formatted string, this is the same as the stub file contents.
+
+        This uses types.FunctionTypes.stub_file_str() for each function.
+
+        :param file_path: File path to access map of
+            ``{ namespace : { function_name : FunctionTypes, ...}``
+            If None then all files are processed, each announced with 'File: ...'.
+        :type file_path: ``str`` or ``NoneType``
+
+        :param add_line_number_as_comment: Flag to add the line number as a suffix. For example:
+            ``def category(unit: bytes) -> bytes: ...#688``
+        :type add_line_number_as_comment: ``bool``
+
+        :returns: ``str`` -- Stub files contents for each file.
+        """
         str_list = []
         # {file_path : { namespace : { function_name : FunctionTypes, ...}, ...}
         if file is None:
@@ -256,30 +322,50 @@ class TypeInferencer(object):
         return 'def {:s}{:s}'.format(function_name, fts.stub_file_str())
 
     def docstring(self, file_path, namespace, function_name, style=DOCSTRING_STYLE_DEFAULT):
-        """Returns a pair (line_number, docstring) for the function."""
+        """
+        Returns a pair (line_number, docstring) for the function.
+
+        :raises: TypeInferencerTypesException
+        """
         fts = self.function_types(file_path, namespace, function_name)
         include_returns = function_name != '__init__'
-        return fts.docstring(include_returns, style)
+        try:
+            return fts.docstring(include_returns, style)
+        except types.TypesExceptionBase as err:
+            raise TypeInferencerTypesException(str(err))
 
     def docstring_map(self, file_path, style=DOCSTRING_STYLE_DEFAULT):
-        """Returns a dict of::
+        """
+        Returns a dict of::
 
             {line_number : (namespace, function_name, docstring), ...}
 
-        For the file."""
+        For the file.
+        """
         line_docs = {}
         for namespace in self.function_map[file_path]:
             for function_name in self.function_map[file_path][namespace]:
                 fts = self.function_map[file_path][namespace][function_name]
                 include_returns = function_name != '__init__'
-                lineno, docstring = fts.docstring(include_returns, style)
-                if lineno in line_docs:
-                    raise TypeInferencerExceptionConflictingLines('Line {:d} appears twice'.format(lineno))
-                line_docs[lineno] = (namespace, function_name, docstring)
+                # TODO: Consistent error handling.
+                try:
+                    lineno, docstring = fts.docstring(include_returns, style)
+                except types.TypesExceptionBase as err:
+                    logging.error(
+                        'Could not create docstring, namespace: {:s}, function: {:s}, error: {!r:s}: {:s}'.format(
+                            namespace, function_name, type(err), str(err))
+                    )
+                    logging.error(''.join(traceback.format_exception(*sys.exc_info())))
+                else:
+                    if lineno in line_docs:
+                        raise TypeInferencerExceptionConflictingLines('Line {:d} appears twice'.format(lineno))
+                    line_docs[lineno] = (namespace, function_name, docstring)
         return line_docs
 
     def _get_func_data(self, file_path, qualified_name, signature):
-        """Return a FunctionTypes() object for the function, created if necessary."""
+        """
+        Return a FunctionTypes() object for the function, created if necessary.
+        """
         if file_path not in self.function_map:
             self.function_map[file_path] = {}
         # Compute namespace hierarchy
@@ -299,7 +385,8 @@ class TypeInferencer(object):
         return r
 
     def is_temporary_file(self, file_path):
-        """Returns True if the file_path is to a temporary file such as '<string>'
+        """
+        Returns True if the file_path is to a temporary file such as '<string>'
         or:
         /Users/USER/Documents/workspace/typin/src/typin/<frozen importlib._bootstrap>
         """
@@ -427,21 +514,21 @@ class TypeInferencer(object):
 
     def _trace(self, *args):
         if self._trace_flag:
-            print(*args)
+            print(*args, flush=True)
 
     def _debug(self, *args):
         if self._trace_flag:
-            print(*args)
+            print(*args, flush=True)
         logging.debug(*args)
 
     def _warn(self, *args):
         if self._trace_flag:
-            print(*args)
+            print(*args, flush=True)
         logging.warning(*args)
 
     def _error(self, *args):
         if self._trace_flag:
-            print(*args)
+            print(*args, flush=True)
         logging.error(*args)
 
     def _assert_exception_propagates(self, event, arg, frame_info):
@@ -496,23 +583,17 @@ class TypeInferencer(object):
         assert event in ('call', 'return', 'exception')
         if event == 'call':
             # arg is None
-            func_types.add_call(inspect.getargvalues(frame),
-                                frame_info.filename,
-                                frame_info.lineno)
+            func_types.add_call(inspect.getargvalues(frame), frame_info.filename, frame_info.lineno)
         elif event == 'return':
             if self.exception_in_progress is not None:
                 self._assert_exception_propagates(event, arg, frame_info)
                 # Ignore spurious return after exception instead add
                 # a propagated exception.
                 self._trace('TRACE: "return": adding exception:', self.exception_in_progress)
-                func_types.add_exception(
-                    self.exception_in_progress.exception_value,
-                    self.exception_in_progress.lineno
-                )
+                func_types.add_exception(self.exception_in_progress.exception_value, self.exception_in_progress.lineno)
                 self.exception_in_progress = None
             else:
-                self._trace('TRACE: "return": adding return value:', arg,
-                            frame_info.lineno)
+                self._trace('TRACE: "return": adding return value:', arg, frame_info.lineno)
                 # arg is a valid return value
                 func_types.add_return(arg, frame_info.lineno)
         else:
@@ -537,13 +618,9 @@ class TypeInferencer(object):
                         repr(exception_value),
                         frame_info.lineno
                     )
-                # Fields: filename, function, lineno, exception_value, eventno
+                # ExceptionInProgress _fields: filename, function, lineno, exception_value, eventno
                 self.exception_in_progress = ExceptionInProgress(
-                    frame_info.filename,
-                    frame_info.function,
-                    frame_info.lineno,
-                    exception_value,
-                    self.eventno,
+                    frame_info.filename, frame_info.function, frame_info.lineno, exception_value, self.eventno,
                 )
 
     def __call__(self, frame, event, arg):
@@ -563,7 +640,7 @@ class TypeInferencer(object):
             except Exception:# AttributeError: # ???
                 repr_arg = 'repr(arg) fails'
             # Order of columns is an attempt to make this very verbose output readable
-            print('[{:8d}] {:9s} {!r:s}: arg="{:s}"'.format(self.eventno, event, frame_info, repr_arg))
+            print('[{:8d}] {:9s} {!r:s}: arg="{:s}"'.format(self.eventno, event, frame_info, repr_arg), flush=True)
         try:
             self._debug(
                 'TypeInferencer.__call__(): file: {:s}#{:d} function: {:s} event:{:s} arg: {:s}'.format(
@@ -603,10 +680,12 @@ class TypeInferencer(object):
                 if q_name != '':
                     try:
                         self._set_bases(file_path, lineno, q_name, bases)
+                        # func_types is a types.FunctionTypes object
                         func_types = self._get_func_data(file_path, q_name, signature)
                         self._process_call_return_exception(frame, event, arg,
                                                             frame_info, func_types)
-
+                        if self.trace_frame_event and (self.events_to_trace is None or event in self.events_to_trace):
+                            print('[{:8d}] func_types now: {!r:s}'.format(self.eventno, func_types), flush=True)
                     except Exception as err:
                         self._error(
                             'ERROR: Could not add event "{:s}" Function: {:s} File: {:s}#{:d}'.format(
@@ -655,10 +734,30 @@ class TypeInferencer(object):
                     if function_name in class_names:
                         names_to_remove.append(function_name)
             if len(names_to_remove):
-                logging.debug('TypeInferencer._cleanup(): file: {:s}'.format(file_path))
-            for function_name in names_to_remove:
-                logging.debug('TypeInferencer._cleanup(): removing {:s}'.format(function_name))
-                del self.function_map[file_path][self.GLOBAL_NAMESPACE][function_name]
+                logging.info('TypeInferencer._cleanup(): file: {:s}'.format(file_path))
+                for function_name in names_to_remove:
+                    logging.info('TypeInferencer._cleanup(): removing {:s}'.format(function_name))
+                    del self.function_map[file_path][self.GLOBAL_NAMESPACE][function_name]
+
+    @staticmethod
+    def sys_setprofile(frame, event, arg):
+        """
+        Use sys.setprofile() on this for even more verbose trace/debug of c_call and c_return events.
+        """
+        frame_info = inspect.getframeinfo(frame)
+        if event not in ('call', 'return', 'line', 'exception'): # Other events are handled as normal by __call__()
+            # The tuple contains the filename, the line number of the current line, the function name, a list of lines
+            # of context from the source code, and the index of the current line within that list.
+            # Traceback(filename='.../3.6/lib/python3.6/_sitebuiltins.py', lineno=19, function='__call__',
+            #           code_context=['    def __call__(self, code=None):\n'], index=0)
+            # Or:
+            # Traceback(filename='<string>', lineno=12, function='__new__', code_context=None, index=None)
+            try:
+                repr_arg = repr(arg)
+            except Exception:# AttributeError: # ???
+                repr_arg = 'repr(arg) fails'
+            # Order of columns is an attempt to make this very verbose output readable
+            print('[{:8d}] {:9s} {!r:s}: arg="{:s}"'.format(-1, event, frame_info, repr_arg), flush=True)
 
     def __enter__(self):
         """Context manager sets the profiling function. This saves the existing
@@ -684,6 +783,8 @@ class TypeInferencer(object):
         """
         self._trace_fn_stack.append(sys.gettrace())
         sys.settrace(self)
+        if self._trace_non_tracked_events:
+            sys.setprofile(TypeInferencer.sys_setprofile)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -692,6 +793,8 @@ class TypeInferencer(object):
         # TODO: Check what is sys.gettrace(), if it is not self then someone has
         # monkeyed with the tracing.
         sys.settrace(self._trace_fn_stack.pop())
+        if self._trace_non_tracked_events:
+            sys.setprofile(None)
         self._cleanup()
 
     def find_docstring_insertion_line_number(self, file_path, src_lines, lineno):

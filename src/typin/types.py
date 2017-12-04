@@ -243,7 +243,12 @@ class FunctionTypes:
 
     @property
     def line_decl(self):
-        """Line number of the function declaration as an integer."""
+        """Line number of the function declaration as an integer.
+
+        :returns: ``int`` -- Function declaration line.
+
+        :raises: ``FunctionTypesExceptionNoData`` If there is no entry points recorded.
+        """
         if len(self.call_line_numbers) == 0:
             raise FunctionTypesExceptionNoData()
         return self.call_line_numbers[0]
@@ -328,7 +333,7 @@ class FunctionTypes:
         """Returns True if 'self' is the first argument i.e. I am a method."""
         arg_types = self.argument_type_strings
         return len(arg_types.keys()) > 0 and list(arg_types.keys())[0] == self.SELF
-    
+
     def types_of_self(self):
         """Returns the set of types (as strings) as seen for the type of 'self'.
         Returns None if 'self' is not the first argument i.e. I am not a method.
@@ -431,10 +436,10 @@ class FunctionTypes:
         style. If include_returns is True then the return value documentation
         is included. If false it is excluded, this is used for functions that
         have no return value, __init__() for example.
-        
+
         Example: https://pythonhosted.org/an_example_pypi_project/sphinx.html
         "def public_fn_with_sphinxy_docstring(name, state=None):"
-        
+
         :param include_returns: Whether to include documentation of the return
             value.
         :type include_returns: ``bool``
@@ -474,16 +479,16 @@ class FunctionTypes:
             str_l.append(':raises: ``{:s}``'.format(', '.join(sorted(excepts))))
         str_l.append('"""')
         return '\n'.join(str_l)
-    
+
     def _docstring_google(self, include_returns):
         """Returns as string that is the function documentation in the Google
         style. If include_returns is True then the return value documentation
         is included. If false it is excluded, this is used for functions that
         have no return value, __init__() for example.
-        
+
         Example: https://pythonhosted.org/an_example_pypi_project/sphinx.html
         "def public_fn_with_googley_docstring(name, state=None):"
-        
+
         :param include_returns: Whether to include documentation of the return
             value.
         :type include_returns: ``bool``
@@ -537,7 +542,10 @@ class FunctionTypes:
 
             src[:line_number] + docstring.split('\\n') + src[line_number:]
 
-        style can be: 'sphinx', 'google'."""
+        style can be: 'sphinx', 'google'.
+
+        :raises: ``TypesExceptionBase`` or derived class.
+        """
 #         despatch = {
 #             'sphinx' : self._docstring_sphinx,
 #             'google' : self._docstring_google,

@@ -105,6 +105,7 @@ def insert_docstrings(ti, doc_dir, style):
     print(' DONE: insert_docstrings() '.center(75, '-'))
 
 def dump_type_inferencer(ti, stream=sys.stdout):
+    """Dumps complete internal representation to stream."""
     stream.write(' ti.dump() '.center(75, '-'))
     stream.write('\n')
     ti.dump(stream=stream)
@@ -112,6 +113,7 @@ def dump_type_inferencer(ti, stream=sys.stdout):
     stream.write('\n')
 
 def print_pretty_format(ti, root_path, stream=sys.stdout):
+    """Dumps the pretty formats for the script that was called directly i.e. root path."""
     stream.write(' ti.pretty_format() '.center(75, '-'))
     stream.write('\n')
     file_paths = ti.file_paths_filtered(root_path, relative=True)
@@ -125,8 +127,7 @@ def print_pretty_format(ti, root_path, stream=sys.stdout):
     stream.write('\n')
 
 def compile_and_exec(filename, trace_frame_events, events_to_trace, *args, **kwargs):
-    """Main execution point.
-    """
+    """Main execution point to trace function calls."""
     print('TRACE: compile_and_exec()', filename, args, kwargs)
     sys.argv = [filename] + list(args)
     logging.debug('typein_cli.compile_and_exec({:s})'.format(filename))
@@ -246,7 +247,8 @@ USAGE
                         format=logFormat,
                         # datefmt='%y-%m-%d % %H:%M:%S',
                         stream=sys.stdout)
-#     print('sys.argv:', sys.argv)
+    print(' START: typin_cli '.center(75, '='))
+    print('typin_cli sys.argv:', sys.argv)
 #     sys.argv = cli_args.args[1:]
 #     print('sys.argv:', sys.argv)
 #     print('cli_args', cli_args)
@@ -270,6 +272,7 @@ USAGE
     print(' CPU time = {:8.3f} (S)'.format(time.time() - start_time))
     print('CPU clock = {:8.3f} (S)'.format(time.clock() - start_clock))
     print('Bye, bye!')
+    print(' FINISH: typin_cli '.center(75, '='))
     return 0
 
 if __name__ == '__main__':
