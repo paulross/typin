@@ -1531,6 +1531,14 @@ def test_insert_docstrings_simple_function():
     # print(new_src_lines[src_start-1:])
     assert new_src_lines == exp_lines
 
+def test_num_docstrings_to_insert_simple_function():
+    start_lineno = inspect.currentframe().f_lineno + 1
+    def func_single_arg_return_arg(arg):
+        return arg
+    with type_inferencer.TypeInferencer() as ti:
+        func_single_arg_return_arg('string')
+    assert ti.num_docstrings_to_insert(__file__) == 1
+
 def test_insert_docstrings_two_functions():
     start_lineno = inspect.currentframe().f_lineno + 1
     def func_single_arg_return_arg(arg):
@@ -1583,6 +1591,16 @@ def test_insert_docstrings_two_functions():
     # print(src_lines[src_start-1:])
     # print(new_src_lines[src_start-1:])
     assert new_src_lines == exp_lines
+
+def test_num_docstrings_to_insert_functions():
+    def func_single_arg_return_arg(arg):
+        return arg
+    def another_func_single_arg_return_arg(arg):
+        return arg
+    with type_inferencer.TypeInferencer() as ti:
+        another_func_single_arg_return_arg(b'bytes')
+        func_single_arg_return_arg('string')
+    assert ti.num_docstrings_to_insert(__file__) == 2
 
 def test_insert_docstrings_simple_class():
     start_lineno = inspect.currentframe().f_lineno + 1
