@@ -838,6 +838,18 @@ class TypeInferencer(object):
                 lineno += 1
         return lineno
 
+    def num_docstrings_to_insert(self, file_path):
+        """Returns the number of docstrings I can insert into the source file.
+
+        :param file_path: Path to the source file.
+        :type file_path: ``str``
+
+        :return: ``int`` -- Number of docstrings I could insert.
+
+        :raises: ``KeyError`` If file_path is unknown.
+        """
+        return len(self.docstring_map(file_path))
+
     def insert_docstrings(self, file_path, src_lines=None, style=DOCSTRING_STYLE_DEFAULT):
         """Injects the documentation strings into lines of source code.
 

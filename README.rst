@@ -69,15 +69,15 @@ the line number where it should be inserted:
     docstring
     """
     <insert documentation for function>
-    
+
     :param s: <insert documentation for argument>
     :type s: ``str``
-    
+
     :param num: <insert documentation for argument>
     :type num: ``int``
-    
+
     :returns: ``str`` -- <insert documentation for return values>
-    
+
     :raises: ``ValueError``
     """
     # Insert template docstrings into the source code.
@@ -93,12 +93,58 @@ This  executes arbitrary python code using ``compile()`` and ``exec()`` like the
 Note use of ``--`` followed by Python script then the arguments for that script surrounded by quotes:
 
 .. code-block:: console
-    
+
     $ python typin_cli.py --stubs=stubs/ --write-docstrings=docstrings/ -- example.py 'foo bar baz'
 
 This will ``compile()/exec()`` ``example.py`` with the arguments ``foo bar baz``
 write the stub files (``'.pyi'`` files) to ``stubs/`` and the source code with the docstrings
 inserted to ``docstrings/``.
+
+``typin_cli.py`` help:
+
+.. code-block:: console
+
+    $ python typin_cli.py --help
+    usage: typin_cli.py [-h] [-l LOGLEVEL] [-d] [-t] [-e EVENTS_TO_TRACE]
+                        [-s STUBS] [-w WRITE_DOCSTRINGS]
+                        [--docstring-style DOCSTRING_STYLE] [-r ROOT]
+                        program argstring
+
+    typin_cli - Infer types of Python functions.
+      Created by Paul Ross on 2017-10-25. Copyright 2017. All rights reserved.
+      Version: v0.1.0 Licensed under MIT License
+    USAGE
+
+    positional arguments:
+      program               Python target file to be compiled and executed.
+      argstring             Argument as a string to give to the target. Prefix
+                            this with '--' to avoid them getting consumed by
+                            typin_cli.py
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -l LOGLEVEL, --loglevel LOGLEVEL
+                            Log Level (debug=10, info=20, warning=30, error=40,
+                            critical=50) [default: 30]
+      -d, --dump            Dump results on stdout after processing. [default:
+                            False]
+      -t, --trace-frame-events
+                            Very verbose trace output, one line per frame event.
+                            [default: False]
+      -e EVENTS_TO_TRACE, --events-to-trace EVENTS_TO_TRACE
+                            Events to trace (additive). [default: []] i.e. every
+                            event.
+      -s STUBS, --stubs STUBS
+                            Directory to write stubs files. [default: ]
+      -w WRITE_DOCSTRINGS, --write-docstrings WRITE_DOCSTRINGS
+                            Directory to write source code with docstrings.
+                            [default: ]
+      --docstring-style DOCSTRING_STYLE
+                            Style of docstrings, can be: 'google', 'sphinx'.
+                            [default: sphinx]
+      -r ROOT, --root ROOT  Root path of the Python packages to generate stub
+                            files for. [default: .]
+
 
 .. image:: https://img.shields.io/pypi/v/typin.svg
         :target: https://pypi.python.org/pypi/typin
