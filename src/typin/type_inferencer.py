@@ -57,7 +57,7 @@ class TypeInferencer(object):
     # This is matched on os.path.basename
     RE_TEMPORARY_FILE = re.compile(r'<(.+)>')
     GLOBAL_NAMESPACE = ''
-    FALSE_FUNCTION_NAMES = ('<dictcomp>', '<genexpr>', '<listcomp>', '<module>', '<setcomp>')
+    FALSE_FUNCTION_NAMES = set(['<dictcomp>', '<genexpr>', '<listcomp>', '<module>', '<setcomp>'])
     DOCSTRING_STYLE_DEFAULT = 'sphinx'
     DOCSTRING_STYLES_AVAILABLE = types.FunctionTypes.DOCSTRING_STYLES_AVAILABLE
     def __init__(self, trace_frame_event=False, events_to_trace=None):

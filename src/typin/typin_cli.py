@@ -132,23 +132,6 @@ def print_pretty_format(ti, root_path, stream=sys.stdout):
     stream.write(' END: ti.pretty_format() '.center(75, '-'))
     stream.write('\n')
 
-def compile_and_exec(filename, trace_frame_events, events_to_trace, *args, **kwargs):
-    """Main execution point to trace function calls."""
-    print('TRACE: compile_and_exec()', filename, args, kwargs)
-    sys.argv = [filename] + list(args)
-    logging.debug('typein_cli.compile_and_exec({:s})'.format(filename))
-    with open(filename) as f_obj:
-        src = f_obj.read()
-        logging.debug('typein_cli.compile_and_exec() read {:d} lines'.format(src.count('\n')))
-        code = compile(src, filename, 'exec')
-        with type_inferencer.TypeInferencer(trace_frame_events, events_to_trace or None) as ti:
-            try:
-                exec(code, globals())#, locals())
-            except SystemExit:
-                # Trap CLI code that calls exit() or sys.exit()
-                pass
-    return ti
-
 class BaseClass:
     def __init__(self):
         pass
@@ -179,6 +162,23 @@ def test():
         print(ti.pretty_format(file_path))
     print(' typin_cli.test() ti.dump() '.center(75, '-'))
     ti.dump()
+
+def compile_and_exec(filename, trace_frame_events, events_to_trace, *args, **kwargs):
+    """Main execution point to trace function calls."""
+    print('TRACE: compile_and_exec()', filename, args, kwargs)
+    sys.argv = [filename] + list(args)
+    logging.debug('typein_cli.compile_and_exec({:s})'.format(filename))
+    with open(filename) as f_obj:
+        src = f_obj.read()
+        logging.debug('typein_cli.compile_and_exec() read {:d} lines'.format(src.count('\n')))
+        code = compile(src, filename, 'exec')
+        with type_inferencer.TypeInferencer(trace_frame_events, events_to_trace or None) as ti:
+            try:
+                exec(code, globals())#, locals())
+            except SystemExit:
+                # Trap CLI code that calls exit() or sys.exit()
+                pass
+    return ti
 
 def main():
     """Command line version of typin which executes arbitrary Python code and
@@ -222,26 +222,32 @@ USAGE
                          dest="stubs",
                          default="",
                          help="Directory to write stubs files. [default: %(default)s]")
-    parser.add_argument("-w", "--write-docstrings",
-                         type=str,
-                         dest="write_docstrings",
-                         default="",
-                         help="Directory to write source code with docstrings. [default: %(default)s]")
-    parser.add_argument("--docstring-style",
-                         type=str,
-                         dest="docstring_style",
-                         default=type_inferencer.TypeInferencer.DOCSTRING_STYLE_DEFAULT,
-                         help="Style of docstrings, can be: {:s}. [default: %(default)s]".format(
-                            ', '.join(
-                                ['\'{:s}\''.format(v) for v in type_inferencer.TypeInferencer.DOCSTRING_STYLES_AVAILABLE]
-                                )
-                            )
-                        )
-    parser.add_argument("-r", "--root",
-                         type=str,
-                         dest="root",
-                         default=".",
-                         help="Root path of the Python packages to generate stub files for. [default: %(default)s]")
+    parser.add_argument(
+        "-w", "--write-docstrings",
+        type=str,
+        dest="write_docstrings",
+        default="",
+        help="Directory to write source code with docstrings. [default: %(default)s]"
+    )
+    parser.add_argument(
+        "--docstring-style",
+        type=str,
+        dest="docstring_style",
+        default=type_inferencer.TypeInferencer.DOCSTRING_STYLE_DEFAULT,
+        help="Style of docstrings, can be: {:s}. [default: %(default)s]".format(
+           ', '.join(
+               ['\'{:s}\''.format(v) for v in type_inferencer.TypeInferencer.DOCSTRING_STYLES_AVAILABLE]
+               )
+           )
+    )
+    parser.add_argument(
+        "-r", "--root",
+        type=str,
+        dest="root",
+        default=".",
+        help="Root path of the Python packages to generate stub files for."
+        " [default: %(default)s]"
+    )
     parser.add_argument(dest="program",
                         help="Python target file to be compiled and executed.")
     parser.add_argument(dest="argstring",
@@ -262,7 +268,8 @@ USAGE
 #     test()
     target_args = cli_args.argstring.split(' ')
     # Execution point
-    ti = compile_and_exec(cli_args.program, cli_args.trace_frame_events, cli_args.events_to_trace, *target_args)
+    ti = compile_and_exec(cli_args.program, cli_args.trace_frame_events,
+                          cli_args.events_to_trace, *target_args)
     # Output: stubs, docstrings and dump.
     if cli_args.stubs:
         write_all_stub_files(ti, cli_args.stubs)
